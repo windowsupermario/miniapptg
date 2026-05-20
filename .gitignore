@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+.env
+scores.json
+ngrok.exe
+*.zip
+.venv/
