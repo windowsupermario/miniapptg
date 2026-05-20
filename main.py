@@ -51,7 +51,10 @@ async def index():
 async def handle_get_user(request: Request):
     user_id = str(request.headers.get("x-telegram-user-id", "guest"))
     state = await get_user(user_id)
-    return {"user_id": user_id, **state}
+    notifs = state.get("notifications", [])
+    if notifs:
+        await set_user(user_id, state["user_name"], state["score"], state["click_bonus"], state["auto_clicker"], state["shield_until"], state["last_attack"], [])
+    return {"user_id": user_id, **state, "notifications": notifs}
 
 
 @app.post("/api/user")
@@ -126,17 +129,26 @@ async def handle_attack(request: Request):
     last_attack_time = last_attacks.get(target_id, 0)
     if now - last_attack_time < ATTACK_COOLDOWN:
         remaining = ATTACK_COOLDOWN - (now - last_attack_time)
-        return {"ok": False, "error": f"Подожди {remaining // 60} мин"}
+        return {"ok": False, "error": f"Подожди {remaining // 60} мин перед атакой на этого игрока"}
 
-    stolen = max(1, target["score"] // 10)
+    import random
+    pct = random.randint(1, 20)
+    stolen = max(1, target["score"] * pct // 100)
     target_score = max(0, target["score"] - stolen)
-    attacker_score = attacker["score"] - ATTACK_COST
+    attacker_score = attacker["score"] - ATTACK_COST + stolen
 
     last_attacks[target_id] = now
     await set_user(attacker_id, attacker["user_name"], attacker_score, attacker["click_bonus"], attacker["auto_clicker"], attacker["shield_until"], last_attacks)
-    await set_user(target_id, target["user_name"], target_score, target["click_bonus"], target["auto_clicker"], target["shield_until"], target["last_attack"])
 
-    return {"ok": True, "stolen": stolen, "new_score": attacker_score}
+    target_notifs = target.get("notifications", [])
+    target_notifs.append({
+        "icon": "💢",
+        "text": f"{attacker['user_name']} атаковал тебя и украл {stolen} 🍪!",
+        "time": now,
+    })
+    await set_user(target_id, target["user_name"], target_score, target["click_bonus"], target["auto_clicker"], target["shield_until"], target["last_attack"], target_notifs)
+
+    return {"ok": True, "stolen": stolen, "pct": pct, "gained": stolen, "cost": ATTACK_COST, "new_score": attacker_score}
 
 
 @app.get("/api/leaderboard")

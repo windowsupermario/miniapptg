@@ -164,6 +164,7 @@
     </div>
 
     <div class="page" id="page-leaderboard">
+        <div id="lb-msg" style="margin-bottom:10px;padding:10px 14px;border-radius:10px;font-size:13px;font-weight:600;display:none"></div>
         <div id="lb-list"></div>
     </div>
 
@@ -351,6 +352,18 @@
             } catch { document.getElementById('status').textContent = '✗ Ошибка'; }
         }
 
+        function showNotificationPopup(icon, text) {
+            const popup = document.getElementById('event-popup');
+            popup.innerHTML = `
+                <div class="event-popup">
+                    <div class="icon">${icon}</div>
+                    <div class="text">${text}</div>
+                    <button class="btn" onclick="closeEvent()">Ок</button>
+                </div>
+            `;
+            popup.style.display = 'block';
+        }
+
         async function loadUser() {
             try {
                 const res = await fetch('/api/user', { headers: { 'x-telegram-user-id': userId } });
@@ -363,7 +376,21 @@
                 renderUI();
                 scheduleRandomEvent();
                 setInterval(updateShieldDisplay, 1000);
+                const notifs = d.notifications || [];
+                if (notifs.length > 0) {
+                    const n = notifs[0];
+                    showNotificationPopup(n.icon, n.text);
+                }
             } catch { renderUI(); scheduleRandomEvent(); }
+        }
+
+        function showLbMsg(text, isError) {
+            const el = document.getElementById('lb-msg');
+            el.textContent = text;
+            el.style.display = 'block';
+            el.style.background = isError ? '#f4433622' : '#4caf5022';
+            el.style.color = isError ? '#f44336' : '#4caf50';
+            setTimeout(() => el.style.display = 'none', 5000);
         }
 
         async function loadLeaderboard() {
@@ -383,7 +410,7 @@
                             <div class="lb-rank ${rankClass}">${i + 1}</div>
                             <div class="lb-name">${e.name} ${isSelf ? '(ты)' : ''}</div>
                             <div class="lb-score">${e.score}</div>
-                            ${!isSelf ? `<button class="lb-attack" data-target="${e.user_id}" data-name="${e.name}">💢</button>` : ''}
+                            ${!isSelf ? `<button class="lb-attack" data-target="${e.user_id}" data-name="${e.name}">💢 Атака (500🍪)</button>` : ''}
                         </div>
                     `;
                 }).join('');
@@ -401,10 +428,10 @@
                             score = d.new_score;
                             renderUI(); scheduleSave();
                             loadLeaderboard();
-                            document.getElementById('status').textContent = '💢 Атака! -' + d.stolen + ' 🍪 у ' + btn.dataset.name;
+                            showLbMsg(`💢 Атака на ${btn.dataset.name} успешна! Украдено ${d.stolen} 🍪 (${d.pct}%). Твой счёт: ${d.new_score}`, false);
                         } else {
-                            document.getElementById('status').textContent = d.error;
-                            btn.disabled = false; btn.textContent = '💢';
+                            showLbMsg(d.error, true);
+                            btn.disabled = false; btn.textContent = '💢 Атака (500🍪)';
                         }
                     });
                 });
