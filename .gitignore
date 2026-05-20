@@ -5,3 +5,5 @@ scores.json
 ngrok.exe
 *.zip
 .venv/
+
+railway.exe

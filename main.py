@@ -1,5 +1,5 @@
 import os
-import asyncio
+import time
 import threading
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -20,7 +20,12 @@ UPGRADES = {
     "click_bonus_3": {"cost": 200, "field": "click_bonus", "value": 3, "name": "Механическая рука"},
     "click_bonus_7": {"cost": 800, "field": "click_bonus", "value": 7, "name": "Робот-кликер"},
     "auto_clicker": {"cost": 300, "field": "auto_clicker", "value": 1, "name": "Автокликер"},
+    "shield":      {"cost": 200, "field": "shield",     "value": 300, "name": "Щит (5 мин)"},
 }
+
+ATTACK_COST = 500
+ATTACK_COOLDOWN = 900  # 15 min
+SHIELD_DURATION = 300  # 5 min
 
 
 @asynccontextmanager
@@ -53,12 +58,15 @@ async def handle_get_user(request: Request):
 async def handle_update_user(request: Request):
     user_id = str(request.headers.get("x-telegram-user-id", "guest"))
     body = await request.json()
+    state = await get_user(user_id)
     await set_user(
         user_id,
         body.get("user_name", ""),
         body.get("score", 0),
         body.get("click_bonus", 0),
         body.get("auto_clicker", 0),
+        state.get("shield_until", 0),
+        state.get("last_attack", {}),
     )
     return {"ok": True}
 
@@ -76,9 +84,11 @@ async def handle_buy_upgrade(request: Request):
     if state["score"] < upgrade["cost"]:
         return {"ok": False, "error": "Недостаточно очков"}
 
+    now = int(time.time())
     new_score = state["score"] - upgrade["cost"]
     new_click_bonus = state["click_bonus"]
     new_auto_clicker = state["auto_clicker"]
+    new_shield_until = state["shield_until"]
 
     if upgrade["field"] == "click_bonus":
         new_click_bonus += upgrade["value"]
@@ -86,9 +96,47 @@ async def handle_buy_upgrade(request: Request):
         if state["auto_clicker"]:
             return {"ok": False, "error": "Уже куплено"}
         new_auto_clicker = 1
+    elif upgrade["field"] == "shield":
+        if new_shield_until > now:
+            return {"ok": False, "error": "Щит уже активен"}
+        new_shield_until = now + SHIELD_DURATION
 
-    await set_user(user_id, state["user_name"], new_score, new_click_bonus, new_auto_clicker)
-    return {"ok": True, "score": new_score, "click_bonus": new_click_bonus, "auto_clicker": new_auto_clicker}
+    await set_user(user_id, state["user_name"], new_score, new_click_bonus, new_auto_clicker, new_shield_until, state["last_attack"])
+    return {"ok": True, "score": new_score, "click_bonus": new_click_bonus, "auto_clicker": new_auto_clicker, "shield_until": new_shield_until}
+
+
+@app.post("/api/attack")
+async def handle_attack(request: Request):
+    attacker_id = str(request.headers.get("x-telegram-user-id", "guest"))
+    body = await request.json()
+    target_id = body.get("target_id", "")
+
+    if not target_id or target_id == attacker_id:
+        return {"ok": False, "error": "Некорректная цель"}
+
+    attacker = await get_user(attacker_id)
+    target = await get_user(target_id)
+
+    now = int(time.time())
+
+    if attacker["score"] < ATTACK_COST:
+        return {"ok": False, "error": f"Нужно {ATTACK_COST} 🍪 для атаки"}
+
+    last_attacks = attacker.get("last_attack", {})
+    last_attack_time = last_attacks.get(target_id, 0)
+    if now - last_attack_time < ATTACK_COOLDOWN:
+        remaining = ATTACK_COOLDOWN - (now - last_attack_time)
+        return {"ok": False, "error": f"Подожди {remaining // 60} мин"}
+
+    stolen = max(1, target["score"] // 10)
+    target_score = max(0, target["score"] - stolen)
+    attacker_score = attacker["score"] - ATTACK_COST
+
+    last_attacks[target_id] = now
+    await set_user(attacker_id, attacker["user_name"], attacker_score, attacker["click_bonus"], attacker["auto_clicker"], attacker["shield_until"], last_attacks)
+    await set_user(target_id, target["user_name"], target_score, target["click_bonus"], target["auto_clicker"], target["shield_until"], target["last_attack"])
+
+    return {"ok": True, "stolen": stolen, "new_score": attacker_score}
 
 
 @app.get("/api/leaderboard")
