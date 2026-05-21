@@ -42,9 +42,13 @@ app = FastAPI(title="Cookie Clicker", lifespan=lifespan)
 app.mount("/static", StaticFiles(directory=Path(__file__).parent / "static"), name="static")
 
 
-@app.get("/", response_class=HTMLResponse)
+@app.get("/")
 async def index():
-    return (Path(__file__).parent / "static" / "index.html").read_text(encoding="utf-8")
+    return HTMLResponse((Path(__file__).parent / "static" / "index.html").read_text(encoding="utf-8"))
+
+@app.get("/ping")
+async def ping():
+    return {"ok": True, "time": int(time.time())}
 
 
 @app.get("/api/user")
