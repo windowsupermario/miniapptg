@@ -1,9 +1,16 @@
 import os
 import json
-import time
 from pathlib import Path
 
 DATABASE_URL = os.getenv("DATABASE_URL", "")
+DEFAULT_EXTRA = {
+    "prestige_bonus": 0,
+    "last_daily": 0,
+    "total_clicks": 0,
+    "total_attacks": 0,
+    "highest_score": 0,
+    "achievements": [],
+}
 
 if DATABASE_URL:
     import asyncpg
@@ -21,43 +28,48 @@ if DATABASE_URL:
                         score INTEGER NOT NULL DEFAULT 0,
                         active_upgrades TEXT NOT NULL DEFAULT '{}',
                         last_attack TEXT NOT NULL DEFAULT '{}',
-                        notifications TEXT NOT NULL DEFAULT '[]'
+                        notifications TEXT NOT NULL DEFAULT '[]',
+                        extra TEXT NOT NULL DEFAULT '{}'
                     )
                 """)
+                try:
+                    await conn.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS extra TEXT NOT NULL DEFAULT '{}'")
+                except:
+                    pass
         return _pool
 
     async def get_user(user_id: str) -> dict:
         pool = await get_pool()
         async with pool.acquire() as conn:
             row = await conn.fetchrow(
-                "SELECT user_name, score, active_upgrades, last_attack, notifications FROM users WHERE user_id = $1",
+                "SELECT user_name, score, active_upgrades, last_attack, notifications, extra FROM users WHERE user_id = $1",
                 user_id
             )
             if row:
+                extra = json.loads(row["extra"]) if row["extra"] else {}
                 return {
                     "user_name": row["user_name"],
                     "score": row["score"],
                     "active_upgrades": json.loads(row["active_upgrades"]),
                     "last_attack": json.loads(row["last_attack"]),
                     "notifications": json.loads(row["notifications"]),
+                    "extra": {**DEFAULT_EXTRA, **extra},
                 }
-            return {"user_name": "", "score": 0, "active_upgrades": {}, "last_attack": {}, "notifications": []}
+            return {"user_name": "", "score": 0, "active_upgrades": {}, "last_attack": {}, "notifications": [], "extra": dict(DEFAULT_EXTRA)}
 
-    async def set_user(user_id: str, user_name: str, score: int, active_upgrades: dict = None, last_attack: dict = None, notifications: list = None):
+    async def set_user(user_id: str, user_name: str, score: int, active_upgrades: dict = None, last_attack: dict = None, notifications: list = None, extra: dict = None):
         pool = await get_pool()
-        if active_upgrades is None:
-            active_upgrades = {}
-        if last_attack is None:
-            last_attack = {}
-        if notifications is None:
-            notifications = []
+        if active_upgrades is None: active_upgrades = {}
+        if last_attack is None: last_attack = {}
+        if notifications is None: notifications = []
+        if extra is None: extra = dict(DEFAULT_EXTRA)
         async with pool.acquire() as conn:
             await conn.execute("""
-                INSERT INTO users (user_id, user_name, score, active_upgrades, last_attack, notifications)
-                VALUES ($1, $2, $3, $4, $5, $6)
+                INSERT INTO users (user_id, user_name, score, active_upgrades, last_attack, notifications, extra)
+                VALUES ($1, $2, $3, $4, $5, $6, $7)
                 ON CONFLICT (user_id) DO UPDATE SET
-                    user_name = $2, score = $3, active_upgrades = $4, last_attack = $5, notifications = $6
-            """, user_id, user_name, score, json.dumps(active_upgrades), json.dumps(last_attack), json.dumps(notifications))
+                    user_name = $2, score = $3, active_upgrades = $4, last_attack = $5, notifications = $6, extra = $7
+            """, user_id, user_name, score, json.dumps(active_upgrades), json.dumps(last_attack), json.dumps(notifications), json.dumps(extra))
 
     async def get_leaderboard(limit: int = 10) -> list:
         pool = await get_pool()
@@ -84,28 +96,29 @@ else:
     async def get_user(user_id: str) -> dict:
         data = _load()
         u = data.get(user_id, {})
+        extra = u.get("extra", {})
         return {
             "user_name": u.get("user_name", ""),
             "score": u.get("score", 0),
             "active_upgrades": u.get("active_upgrades", {}),
             "last_attack": u.get("last_attack", {}),
             "notifications": u.get("notifications", []),
+            "extra": {**DEFAULT_EXTRA, **extra},
         }
 
-    async def set_user(user_id: str, user_name: str, score: int, active_upgrades: dict = None, last_attack: dict = None, notifications: list = None):
+    async def set_user(user_id: str, user_name: str, score: int, active_upgrades: dict = None, last_attack: dict = None, notifications: list = None, extra: dict = None):
         data = _load()
-        if active_upgrades is None:
-            active_upgrades = {}
-        if last_attack is None:
-            last_attack = {}
-        if notifications is None:
-            notifications = []
+        if active_upgrades is None: active_upgrades = {}
+        if last_attack is None: last_attack = {}
+        if notifications is None: notifications = []
+        if extra is None: extra = dict(DEFAULT_EXTRA)
         data[user_id] = {
             "user_name": user_name,
             "score": score,
             "active_upgrades": active_upgrades,
             "last_attack": last_attack,
             "notifications": notifications,
+            "extra": extra,
         }
         _save(data)
 
