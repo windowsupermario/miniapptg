@@ -21,6 +21,10 @@ DEFAULT_EXTRA = {
     "last_decay_time": 0,
     "attack_bonus_pct": 0,
     "start_bonus": 0,
+    "max_energy": 100,
+    "active_planets": {},
+    "legendary_bought": [],
+    "referred_by": "",
 }
 
 if DATABASE_URL:

@@ -9,10 +9,10 @@ from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
+load_dotenv()
+
 from bot import start_bot, stop_bot
 from database import get_pool, get_user, set_user, get_leaderboard, DEFAULT_EXTRA
-
-load_dotenv()
 
 PORT = int(os.getenv("PORT", 8000))
 
@@ -184,7 +184,7 @@ async def lifespan(app: FastAPI):
     t = threading.Thread(target=start_bot, daemon=True)
     t.start()
     yield
-    await stop_bot()
+    stop_bot()
 
 
 app = FastAPI(title="Cookie Clicker", lifespan=lifespan)
