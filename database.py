@@ -14,6 +14,7 @@ DEFAULT_EXTRA = {
     "owned_skins": ["default"],
     "stars": 0,
     "notifications_enabled": True,
+    "referrals_count": 0,
 }
 
 if DATABASE_URL:

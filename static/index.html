@@ -606,7 +606,7 @@
                 closeEvent();
                 if (d.new_achievements && d.new_achievements.length > 0) {
                     Sound.achievement();
-                    showEventPopup('🏆', 'Новое достижение!', d.new_achievements.join(', '));
+                    showEventPopup('🏆', d.new_achievements.join(', '), '');
                 } else {
                     showEventPopup('🔥', 'Престиж завершён!', 'Бонус к клику: +' + d.prestige_bonus);
                 }
@@ -837,7 +837,7 @@
 
                 if (d.new_achievements && d.new_achievements.length > 0) {
                     Sound.achievement();
-                    showEventPopup('🏆', 'Новое достижение!', 'Открой вкладку "Достиж"');
+                    showEventPopup('🏆', d.new_achievements.join(', '), '');
                 }
 
                 const notifs = d.notifications || [];
@@ -955,7 +955,7 @@
 
         function renderStats() {
             const e = extra;
-            const totalAch = 8;
+            const totalAch = 10;
             const earnedAch = (e.achievements || []).length;
             const notifOn = e.notifications_enabled !== false;
             let html = `

@@ -57,6 +57,8 @@ ACHIEVEMENTS = [
     {"id": "attack_10",    "name": "Разбойник",      "desc": "Атаковать 10 раз",       "icon": "🗡️",  "stars": 3,  "check": lambda e: e["total_attacks"] >= 10},
     {"id": "prestige_1",   "name": "Феникс",         "desc": "Сделать престиж 1 раз",  "icon": "🔥",  "stars": 5,  "check": lambda e: e["prestige_bonus"] >= 1},
     {"id": "prestige_5",   "name": "Легенда",        "desc": "Сделать престиж 5 раз",   "icon": "🏆",  "stars": 10, "check": lambda e: e["prestige_bonus"] >= 5},
+    {"id": "referral_1",   "name": "Друг",           "desc": "Привести 1 друга",         "icon": "🤝",  "stars": 3,  "check": lambda e: e.get("referrals_count", 0) >= 1},
+    {"id": "referral_3",   "name": "Компания",       "desc": "Привести 3 друзей",        "icon": "👥",  "stars": 5,  "check": lambda e: e.get("referrals_count", 0) >= 3},
 ]
 
 STAR_SHOP = [
@@ -99,10 +101,10 @@ def check_achievements(extra):
     new_ones = []
     for a in ACHIEVEMENTS:
         if a["id"] not in earned and a["check"](extra):
-            new_ones.append(a["id"])
+            new_ones.append({"id": a["id"], "name": a["name"]})
             extra["stars"] = extra.get("stars", 0) + a.get("stars", 0)
     if new_ones:
-        earned.update(new_ones)
+        earned.update(a["id"] for a in new_ones)
         extra["achievements"] = list(earned)
     return new_ones
 
@@ -141,10 +143,14 @@ async def handle_get_user(request: Request, ref: str = ""):
         extra["referred_by"] = ref
         try:
             referrer = await get_user(ref)
+            ref_extra = referrer.get("extra", dict(DEFAULT_EXTRA))
+            ref_extra["referrals_count"] = ref_extra.get("referrals_count", 0) + 1
             ref_score = referrer.get("score", 0)
             if ref_score >= 100:
                 extra["referral_bonus_claimed"] = True
                 state["score"] += REFERRAL_BONUS
+            await set_user(ref, referrer["user_name"], referrer["score"], referrer["active_upgrades"],
+                           referrer["last_attack"], extra=ref_extra)
         except:
             pass
         await set_user(user_id, state["user_name"], state["score"], state["active_upgrades"],
@@ -171,7 +177,7 @@ async def handle_get_user(request: Request, ref: str = ""):
         "active_upgrades": state["active_upgrades"],
         "notifications": notifs,
         "extra": extra,
-        "new_achievements": new_achs,
+        "new_achievements": [a["name"] for a in new_achs],
     }
 
 
@@ -242,6 +248,9 @@ async def handle_attack(request: Request):
     if not target_id or target_id == attacker_id:
         return {"ok": False, "error": "Некорректная цель"}
 
+    if random.random() < 0.5:
+        return {"ok": False, "error": "💢 Атака провалилась! Цель увернулась."}
+
     attacker = await get_user(attacker_id)
     target = await get_user(target_id)
     now = int(time.time())
@@ -305,7 +314,7 @@ async def handle_prestige(request: Request):
 
     await set_user(user_id, state["user_name"], 0, {}, {}, extra=extra)
 
-    return {"ok": True, "prestige_bonus": extra["prestige_bonus"], "new_achievements": new_achs}
+    return {"ok": True, "prestige_bonus": extra["prestige_bonus"], "new_achievements": [a["name"] for a in new_achs]}
 
 
 @app.post("/api/daily")
