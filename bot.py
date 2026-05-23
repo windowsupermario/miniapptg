@@ -14,13 +14,18 @@ _stop_event = threading.Event()
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    args = context.args
+    ref_text = ""
+    if args and args[0].startswith("ref_"):
+        ref_id = args[0][4:]
+        ref_text = f"\n\n👋 Вас пригласил пользователь {ref_id}!"
     keyboard = InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text="Открыть Mini App", web_app={"url": APP_URL})]
+            [InlineKeyboardButton(text="Открыть Mini App", web_app={"url": APP_URL + (f"?ref={ref_id}" if ref_id else "")})]
         ]
     )
     await update.message.reply_text(
-        "Добро пожаловать! Нажми кнопку, чтобы открыть Mini App:",
+        "Добро пожаловать! Нажми кнопку, чтобы открыть Mini App:" + ref_text,
         reply_markup=keyboard,
     )
 

@@ -191,6 +191,7 @@
         <button class="tab" data-tab="shop">🏪 Магазин</button>
         <button class="tab" data-tab="leaderboard">🏆 Топ</button>
         <button class="tab" data-tab="achievements">🎯 Достиж</button>
+        <button class="tab" data-tab="stats">📊 Стата</button>
     </div>
 
     <div class="page active" id="page-game">
@@ -223,12 +224,21 @@
 
     <div class="page" id="page-leaderboard">
         <div id="lb-msg" style="margin-bottom:10px;padding:10px 14px;border-radius:10px;font-size:13px;font-weight:600;display:none"></div>
+        <div class="tabs" style="margin-bottom:10px" id="lb-sort-tabs">
+            <button class="tab active" data-sort="score">🍪 Счёт</button>
+            <button class="tab" data-sort="prestige">🔥 Престиж</button>
+            <button class="tab" data-sort="attacks">💢 Атаки</button>
+        </div>
         <div id="lb-list"></div>
     </div>
 
     <div class="page" id="page-achievements">
         <p style="font-size:13px;color:var(--tg-theme-hint-color,#888);margin-bottom:12px">Достижения обновляются автоматически</p>
         <div id="ach-list"></div>
+    </div>
+
+    <div class="page" id="page-stats">
+        <div id="stats-content"></div>
     </div>
 
     <div id="golden-cookie" class="golden-cookie">🌟</div>
@@ -298,6 +308,28 @@
             return (1 + clickBonus) * boost;
         }
 
+        const Sound = {
+            ctx: null,
+            _init() { if (!this.ctx) this.ctx = new (window.AudioContext || window.webkitAudioContext)(); },
+            _tone(freq, dur, type) {
+                this._init();
+                const o = this.ctx.createOscillator();
+                const g = this.ctx.createGain();
+                o.type = type || 'sine';
+                o.frequency.value = freq;
+                g.gain.setValueAtTime(0.15, this.ctx.currentTime);
+                g.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + dur);
+                o.connect(g); g.connect(this.ctx.destination);
+                o.start(); o.stop(this.ctx.currentTime + dur);
+            },
+            click() { this._tone(800, 0.06, 'sine'); },
+            buy() { this._tone(600, 0.1, 'sine'); setTimeout(() => this._tone(900, 0.1, 'sine'), 100); },
+            attack() { this._tone(200, 0.15, 'sawtooth'); },
+            event() { this._tone(300, 0.2, 'sine'); setTimeout(() => this._tone(200, 0.2, 'sine'), 150); },
+            golden() { this._tone(500, 0.1, 'sine'); setTimeout(() => this._tone(800, 0.1, 'sine'), 100); setTimeout(() => this._tone(1200, 0.15, 'sine'), 200); },
+            achievement() { this._tone(400, 0.1, 'sine'); setTimeout(() => this._tone(600, 0.1, 'sine'), 100); setTimeout(() => this._tone(800, 0.15, 'sine'), 200); },
+        };
+
         function showFloatingText(x, y, text, cls) {
             const el = document.createElement('div');
             el.className = 'plus-one ' + (cls || 'gain');
@@ -332,21 +364,43 @@
             const now = Math.floor(Date.now() / 1000);
             if (shieldUntil > now) {
                 showEventPopup('🛡️', 'Щит сработал!', 'Злоумышленник не прошёл');
+                Sound.event();
                 return;
             }
-            const EVENTS = [
-                { icon: '🦝', text: 'Вор украл печенье!', sub: (n) => '-' + n + ' 🍪' },
-                { icon: '💔', text: 'Печенье рассыпалось!', sub: (n) => '-' + n + ' 🍪' },
-                { icon: '🐭', text: 'Мыши пробрались на склад!', sub: (n) => '-' + n + ' 🍪' },
+            const CHOICE_EVENTS = [
+                { icon: '🦝', text: 'Вор лезет в кладовую!', choices: [
+                    { text: 'Откупиться 50 🍪', fn: () => { if (score >= 50) { score -= 50; showFloatingText(innerWidth/2, innerHeight/2-40, '-50 🍪', 'loss'); } else { score = Math.max(0, score - 20); showFloatingText(innerWidth/2, innerHeight/2-40, '-20 🍪', 'loss'); } } },
+                    { text: 'Рискнуть!', fn: () => { if (Math.random() < 0.5) { showFloatingText(innerWidth/2, innerHeight/2-40, '❌ -100 🍪', 'loss'); score = Math.max(0, score - 100); } else { showFloatingText(innerWidth/2, innerHeight/2-40, '✅ Устоял!', 'gain'); } } },
+                ]},
+                { icon: '🐭', text: 'Мыши в кладовке!', choices: [
+                    { text: 'Купить ловушку 30 🍪', fn: () => { if (score >= 30) { score -= 30; } else { score = Math.max(0, score - 20); } } },
+                    { text: 'Игнорировать', fn: () => { const loss = Math.min(score, Math.floor(score * 0.1) || 5); score -= loss; showFloatingText(innerWidth/2, innerHeight/2-40, '-' + loss + ' 🍪', 'loss'); } },
+                ]},
+                { icon: '💔', text: 'Печенье рассыпалось!', choices: [
+                    { text: 'Собрать (спасти половину)', fn: () => { const loss = Math.min(score, Math.floor(score * 0.05) || 3); score -= loss; showFloatingText(innerWidth/2, innerHeight/2-40, '-' + loss + ' 🍪', 'loss'); } },
+                    { text: 'Выбросить и забыть', fn: () => { const loss = Math.min(score, Math.floor(score * 0.15) || 10); score -= loss; showFloatingText(innerWidth/2, innerHeight/2-40, '-' + loss + ' 🍪', 'loss'); } },
+                ]},
             ];
-            const event = EVENTS[Math.floor(Math.random() * EVENTS.length)];
-            const loss = Math.max(1, Math.floor(score * (0.05 + Math.random() * 0.15)));
-            const actualLoss = Math.min(score, loss);
-            if (actualLoss <= 0) return;
-            score -= actualLoss;
-            renderUI(); scheduleSave();
-            showEventPopup(event.icon, event.text, event.sub(actualLoss));
-            showFloatingText(window.innerWidth / 2, window.innerHeight / 2, '-' + actualLoss, 'loss');
+            const evt = CHOICE_EVENTS[Math.floor(Math.random() * CHOICE_EVENTS.length)];
+            const popup = document.getElementById('event-popup');
+            popup.innerHTML = `
+                <div class="event-popup">
+                    <div class="icon">${evt.icon}</div>
+                    <div class="text">${evt.text}</div>
+                    <div style="display:flex;flex-direction:column;gap:8px;margin-top:12px">
+                        ${evt.choices.map((c, i) => `<button class="btn choice-btn" data-idx="${i}">${c.text}</button>`).join('')}
+                    </div>
+                </div>
+            `;
+            popup.style.display = 'block';
+            Sound.event();
+            popup.querySelectorAll('.choice-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    evt.choices[parseInt(btn.dataset.idx)].fn();
+                    popup.style.display = 'none';
+                    renderUI(); scheduleSave();
+                });
+            });
         }
 
         function scheduleRandomEvent() {
@@ -398,6 +452,7 @@
             });
             const d = await res.json();
             if (d.ok) {
+                Sound.golden();
                 score = d.score;
                 activeUpgrades = d.active_upgrades || {};
                 recalcDerived();
@@ -415,6 +470,7 @@
                 if (btn.dataset.tab === 'leaderboard') loadLeaderboard();
                 if (btn.dataset.tab === 'shop') renderShop();
                 if (btn.dataset.tab === 'achievements') renderAchievements();
+                if (btn.dataset.tab === 'stats') renderStats();
             });
         });
 
@@ -497,6 +553,7 @@
                 renderUI(); scheduleSave();
                 closeEvent();
                 if (d.new_achievements && d.new_achievements.length > 0) {
+                    Sound.achievement();
                     showEventPopup('🏆', 'Новое достижение!', d.new_achievements.join(', '));
                 } else {
                     showEventPopup('🔥', 'Престиж завершён!', 'Бонус к клику: +' + d.prestige_bonus);
@@ -565,6 +622,7 @@
                     });
                     const data = await res.json();
                     if (data.ok) {
+                        Sound.buy();
                         score = data.score;
                         activeUpgrades = data.active_upgrades || {};
                         recalcDerived();
@@ -600,6 +658,15 @@
                     renderUI(); scheduleSave();
                 });
             });
+
+            document.getElementById('lb-sort-tabs').querySelectorAll('.tab').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    document.getElementById('lb-sort-tabs').querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                    btn.classList.add('active');
+                    lbSort = btn.dataset.sort;
+                    loadLeaderboard();
+                });
+            });
         }
 
         function renderSkinsHtml() {
@@ -627,10 +694,17 @@
 
         function startAutoClicker() {
             if (autoTimer) clearInterval(autoTimer);
+            const cookie = document.getElementById('cookie');
             autoTimer = setInterval(() => {
                 if (!autoClicker) { clearInterval(autoTimer); autoTimer = null; return; }
                 score++;
                 renderUI(); scheduleSave();
+                cookie.style.transform = 'scale(0.95)';
+                cookie.style.boxShadow = '0 2px 8px rgba(0,0,0,0.2), inset 0 -2px 4px rgba(0,0,0,0.1)';
+                setTimeout(() => {
+                    cookie.style.transform = '';
+                    cookie.style.boxShadow = '';
+                }, 150);
             }, 2000);
         }
 
@@ -675,6 +749,7 @@
                 scheduleGoldenCookie();
 
                 if (d.new_achievements && d.new_achievements.length > 0) {
+                    Sound.achievement();
                     showEventPopup('🏆', 'Новое достижение!', 'Открой вкладку "Достиж"');
                 }
 
@@ -700,6 +775,8 @@
             }
         }
 
+        let lbSort = 'score';
+
         function showLbMsg(text, isError) {
             const el = document.getElementById('lb-msg');
             el.textContent = text;
@@ -711,21 +788,23 @@
 
         async function loadLeaderboard() {
             try {
-                const res = await fetch('/api/leaderboard');
+                const res = await fetch('/api/leaderboard?sort=' + lbSort);
                 const d = await res.json();
                 const list = document.getElementById('lb-list');
                 if (!d.leaderboard || d.leaderboard.length === 0) {
                     list.innerHTML = '<div class="lb-empty">Пока нет участников</div>';
                     return;
                 }
+                const extraCol = lbSort === 'prestige' ? '🔥' : lbSort === 'attacks' ? '💢' : '🍪';
                 list.innerHTML = d.leaderboard.map((e, i) => {
                     const rankClass = i === 0 ? 'gold' : i === 1 ? 'silver' : i === 2 ? 'bronze' : '';
                     const isSelf = e.user_id === userId;
+                    const val = lbSort === 'prestige' ? e.prestige : lbSort === 'attacks' ? e.attacks : e.score;
                     return `
                         <div class="lb-entry">
                             <div class="lb-rank ${rankClass}">${i + 1}</div>
                             <div class="lb-name">${e.name} ${isSelf ? '(ты)' : ''}</div>
-                            <div class="lb-score">${e.score}</div>
+                            <div class="lb-score">${extraCol} ${val}</div>
                             ${!isSelf ? `
                             <div class="lb-actions">
                                 <button class="lb-btn lb-attack" data-target="${e.user_id}" data-name="${e.name}">💢</button>
@@ -744,6 +823,7 @@
                         });
                         const d = await res.json();
                         if (d.ok) {
+                            Sound.attack();
                             score = d.new_score;
                             renderUI(); scheduleSave();
                             loadLeaderboard();
@@ -783,6 +863,33 @@
             }
         }
 
+        function renderStats() {
+            const e = extra;
+            const totalAch = 8;
+            const earnedAch = (e.achievements || []).length;
+            document.getElementById('stats-content').innerHTML = `
+                <div class="shop-item"><span class="shop-icon">🍪</span><div class="shop-info"><div class="shop-name">${score}</div><div class="shop-desc">Текущий счёт</div></div></div>
+                <div class="shop-item"><span class="shop-icon">📈</span><div class="shop-info"><div class="shop-name">${e.highest_score || 0}</div><div class="shop-desc">Рекорд</div></div></div>
+                <div class="shop-item"><span class="shop-icon">🔥</span><div class="shop-info"><div class="shop-name">${e.prestige_bonus || 0}</div><div class="shop-desc">Престиж</div></div></div>
+                <div class="shop-item"><span class="shop-icon">👆</span><div class="shop-info"><div class="shop-name">${e.total_clicks || 0}</div><div class="shop-desc">Всего кликов</div></div></div>
+                <div class="shop-item"><span class="shop-icon">💢</span><div class="shop-info"><div class="shop-name">${e.total_attacks || 0}</div><div class="shop-desc">Атак совершено</div></div></div>
+                <div class="shop-item"><span class="shop-icon">🏆</span><div class="shop-info"><div class="shop-name">${earnedAch} / ${totalAch}</div><div class="shop-desc">Достижений</div></div></div>
+                <div class="shop-item"><span class="shop-icon">🎨</span><div class="shop-info"><div class="shop-name">${ownedSkins.length}</div><div class="shop-desc">Скинов в коллекции</div></div></div>
+                <div class="shop-item"><span class="shop-icon">🔗</span><div class="shop-info"><div class="shop-name" id="ref-link" style="font-size:12px;word-break:break-all">Загрузка...</div><div class="shop-desc">Реферальная ссылка (приведи друга → +100 🍪)</div></div><button class="shop-btn" id="ref-copy-btn" onclick="copyRefLink()">Копировать</button></div>
+            `;
+            fetch('/api/referral', { headers: { 'x-telegram-user-id': userId } }).then(r => r.json()).then(d => {
+                document.getElementById('ref-link').textContent = d.referral_link || '';
+            });
+        }
+
+        function copyRefLink() {
+            const link = document.getElementById('ref-link').textContent;
+            if (navigator.clipboard) {
+                navigator.clipboard.writeText(link);
+                document.getElementById('status').textContent = '✓ Ссылка скопирована';
+            }
+        }
+
         async function renderAchievements() {
             const res = await fetch('/api/achievements');
             const data = await res.json();
@@ -819,6 +926,7 @@
             if (comboResets) clearTimeout(comboResets);
             comboResets = setTimeout(() => { combo = 0; renderCombo(); }, 3000);
 
+            Sound.click();
             const baseGain = perClick();
             const comboMultiplier = 1 + Math.min(combo, 5) * 0.1;
             const gain = Math.round(baseGain * comboMultiplier);

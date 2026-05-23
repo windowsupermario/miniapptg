@@ -73,13 +73,27 @@ if DATABASE_URL:
                     user_name = $2, score = $3, active_upgrades = $4, last_attack = $5, notifications = $6, extra = $7
             """, user_id, user_name, score, json.dumps(active_upgrades), json.dumps(last_attack), json.dumps(notifications), json.dumps(extra))
 
-    async def get_leaderboard(limit: int = 10) -> list:
+    async def get_leaderboard(limit: int = 10, sort_by: str = "score") -> list:
         pool = await get_pool()
         async with pool.acquire() as conn:
-            rows = await conn.fetch(
-                "SELECT user_id, user_name, score FROM users ORDER BY score DESC LIMIT $1", limit
-            )
-            return [{"user_id": r["user_id"], "name": r["user_name"] or "Аноним", "score": r["score"]} for r in rows]
+            rows = await conn.fetch("SELECT user_id, user_name, score, extra FROM users")
+            entries = []
+            for r in rows:
+                extra = json.loads(r["extra"]) if r.get("extra") else {}
+                entries.append({
+                    "user_id": r["user_id"],
+                    "name": r["user_name"] or "Аноним",
+                    "score": r["score"],
+                    "prestige": extra.get("prestige_bonus", 0),
+                    "attacks": extra.get("total_attacks", 0),
+                })
+            if sort_by == "prestige":
+                entries.sort(key=lambda x: -x["prestige"])
+            elif sort_by == "attacks":
+                entries.sort(key=lambda x: -x["attacks"])
+            else:
+                entries.sort(key=lambda x: -x["score"])
+            return entries[:limit]
 
 else:
     _file = Path(__file__).parent / "scores.json"
@@ -124,10 +138,22 @@ else:
         }
         _save(data)
 
-    async def get_leaderboard(limit: int = 10) -> list:
+    async def get_leaderboard(limit: int = 10, sort_by: str = "score") -> list:
         data = _load()
         entries = []
         for uid, u in data.items():
-            entries.append({"user_id": uid, "name": u.get("user_name", "Аноним"), "score": u.get("score", 0)})
-        entries.sort(key=lambda x: -x["score"])
+            extra = u.get("extra", {})
+            entries.append({
+                "user_id": uid,
+                "name": u.get("user_name", "Аноним"),
+                "score": u.get("score", 0),
+                "prestige": extra.get("prestige_bonus", 0),
+                "attacks": extra.get("total_attacks", 0),
+            })
+        if sort_by == "prestige":
+            entries.sort(key=lambda x: -x["prestige"])
+        elif sort_by == "attacks":
+            entries.sort(key=lambda x: -x["attacks"])
+        else:
+            entries.sort(key=lambda x: -x["score"])
         return entries[:limit]

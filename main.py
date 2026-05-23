@@ -30,6 +30,7 @@ ATTACK_COOLDOWN = 900
 PRESTIGE_SCORE = 10000
 DAILY_BONUS = 200
 SPY_COST = 100
+REFERRAL_BONUS = 100
 
 GOLDEN_REWARDS = [
     {"type": "cookies", "value": 50,  "icon": "🍪", "text": "+50 🍪"},
@@ -124,9 +125,23 @@ async def ping():
 
 
 @app.get("/api/user")
-async def handle_get_user(request: Request):
+async def handle_get_user(request: Request, ref: str = ""):
     user_id = str(request.headers.get("x-telegram-user-id", "guest"))
     state = await get_user(user_id)
+    extra = state.get("extra", dict(DEFAULT_EXTRA))
+
+    if ref and not extra.get("referred_by") and ref != user_id:
+        extra["referred_by"] = ref
+        try:
+            referrer = await get_user(ref)
+            ref_score = referrer.get("score", 0)
+            if ref_score >= 100:
+                extra["referral_bonus_claimed"] = True
+                state["score"] += REFERRAL_BONUS
+        except:
+            pass
+        await set_user(user_id, state["user_name"], state["score"], state["active_upgrades"],
+                       state["last_attack"], extra=extra)
     cb, ac, su, sp = calc_derived_stats(state["active_upgrades"])
     extra = state.get("extra", dict(DEFAULT_EXTRA))
     click_bonus = calc_click_bonus(cb, extra)
@@ -394,9 +409,23 @@ async def handle_skins_list():
 
 
 @app.get("/api/leaderboard")
-async def handle_leaderboard():
-    board = await get_leaderboard(10)
+async def handle_leaderboard(sort: str = "score"):
+    board = await get_leaderboard(10, sort)
     return {"leaderboard": board}
+
+
+@app.get("/api/referral")
+async def handle_referral(request: Request):
+    user_id = str(request.headers.get("x-telegram-user-id", "guest"))
+    state = await get_user(user_id)
+    extra = state.get("extra", dict(DEFAULT_EXTRA))
+    referred = extra.get("referred_by", "")
+    return {"referral_link": f"https://t.me/{(await get_bot_username())}?start=ref_{user_id}", "referred_by": referred}
+
+
+async def get_bot_username():
+    import os
+    return os.getenv("BOT_USERNAME", "mini_app_bot")
 
 
 @app.get("/api/achievements")
