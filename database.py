@@ -12,6 +12,8 @@ DEFAULT_EXTRA = {
     "achievements": [],
     "current_skin": "default",
     "owned_skins": ["default"],
+    "stars": 0,
+    "notifications_enabled": True,
 }
 
 if DATABASE_URL:

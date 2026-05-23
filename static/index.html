@@ -28,6 +28,13 @@
             transition: all 0.2s; border: none; background: none; white-space: nowrap;
         }
         .tab.active { background: var(--tg-theme-bg-color, #fff); color: var(--tg-theme-text-color, #000); box-shadow: 0 1px 4px rgba(0,0,0,0.1); }
+        .sort-tab {
+            flex: 1; padding: 8px; text-align: center; border-radius: 8px;
+            font-size: 12px; font-weight: 600; cursor: pointer;
+            color: var(--tg-theme-hint-color, #888); border: none; background: none;
+            transition: all 0.2s;
+        }
+        .sort-tab.active { background: var(--tg-theme-bg-color, #fff); color: var(--tg-theme-text-color, #000); box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
         .page { display: none; }
         .page.active { display: block; }
 
@@ -183,6 +190,31 @@
         .ach-status { font-size: 18px; }
         .ach-done { color: #4caf50; }
         .ach-locked { color: var(--tg-theme-hint-color, #ccc); }
+
+        .cookie.glow {
+            animation: cookieGlow 0.8s ease-in-out infinite alternate;
+        }
+        @keyframes cookieGlow {
+            0% { box-shadow: 0 8px 24px rgba(0,0,0,0.15), 0 0 20px rgba(255,215,0,0.3); }
+            100% { box-shadow: 0 8px 24px rgba(0,0,0,0.15), 0 0 50px rgba(255,215,0,0.8); }
+        }
+        .x2-badge {
+            position: absolute; top: -8px; right: -8px; z-index: 5;
+            background: #ff8f00; color: #fff; border-radius: 50%;
+            width: 36px; height: 36px; display: none; align-items: center; justify-content: center;
+            font-size: 13px; font-weight: 800; box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+        }
+        .toggle-wrap { display: flex; align-items: center; gap: 10px; padding: 10px 0; }
+        .toggle {
+            width: 44px; height: 24px; border-radius: 12px; background: #ccc; cursor: pointer;
+            position: relative; transition: background 0.2s; border: none; flex-shrink: 0;
+        }
+        .toggle.on { background: #4caf50; }
+        .toggle::after {
+            content: ''; position: absolute; top: 2px; left: 2px; width: 20px; height: 20px;
+            border-radius: 50%; background: #fff; transition: transform 0.2s;
+        }
+        .toggle.on::after { transform: translateX(20px); }
     </style>
 </head>
 <body>
@@ -190,13 +222,13 @@
         <button class="tab active" data-tab="game">🍪 Игра</button>
         <button class="tab" data-tab="shop">🏪 Магазин</button>
         <button class="tab" data-tab="leaderboard">🏆 Топ</button>
-        <button class="tab" data-tab="stats">📊 Стата</button>
+        <button class="tab" data-tab="stats">👤 Профиль</button>
     </div>
 
     <div class="page active" id="page-game">
         <div class="game">
             <p style="font-size:13px;color:var(--tg-theme-hint-color,#888);margin-bottom:2px" id="username">Загрузка...</p>
-            <div class="score-label">Очки</div>
+            <div class="score-label">Очки · <span id="star-display">0</span> ⭐</div>
             <div class="score" id="score">0</div>
             <div class="combo" id="combo"></div>
             <div class="multiplier" id="multiplier">+1 за клик</div>
@@ -211,6 +243,7 @@
                         <div class="chip"></div><div class="chip"></div><div class="chip"></div>
                     </div>
                 </div>
+                <div class="x2-badge" id="x2-badge">x2</div>
             </div>
             <button class="prestige-btn" id="prestige-btn" style="display:none">🔥 Престиж (нужно 10000 🍪)</button>
             <div class="status" id="status"></div>
@@ -224,9 +257,9 @@
     <div class="page" id="page-leaderboard">
         <div id="lb-msg" style="margin-bottom:10px;padding:10px 14px;border-radius:10px;font-size:13px;font-weight:600;display:none"></div>
         <div class="tabs" style="margin-bottom:10px" id="lb-sort-tabs">
-            <button class="tab active" data-sort="score">🍪 Счёт</button>
-            <button class="tab" data-sort="prestige">🔥 Престиж</button>
-            <button class="tab" data-sort="attacks">💢 Атаки</button>
+            <button class="sort-tab active" data-sort="score">🍪 Счёт</button>
+            <button class="sort-tab" data-sort="prestige">🔥 Престиж</button>
+            <button class="sort-tab" data-sort="attacks">💢 Атаки</button>
         </div>
         <div id="lb-list"></div>
     </div>
@@ -250,6 +283,7 @@
         let recalcTimer = null, goldenTimer = null, comboResets = null;
         let combo = 0, lastClickTime = 0, clicksSinceSave = 0;
         let goldenEnabled = false;
+        let glowActive = false, glowTimer = null;
 
         const SKINS = {
             default: { name: 'Классическая', cost: 0, gradient: 'radial-gradient(circle at 35% 35%, #f5d68a, #c8943c)', chips: '#6b4226' },
@@ -298,8 +332,9 @@
         }
 
         function perClick() {
+            const glow = glowActive ? 2 : 1;
             const boost = activeUpgrades.golden_boost && activeUpgrades.golden_boost > Math.floor(Date.now() / 1000) ? 2 : 1;
-            return (1 + clickBonus) * boost;
+            return (1 + clickBonus) * glow * boost;
         }
 
         const Sound = {
@@ -406,6 +441,20 @@
             }, delay);
         }
 
+        function scheduleGlow() {
+            if (glowTimer) clearTimeout(glowTimer);
+            const delay = 15000 + Math.random() * 30000;
+            glowTimer = setTimeout(() => {
+                glowActive = true;
+                renderUI();
+                setTimeout(() => {
+                    glowActive = false;
+                    renderUI();
+                    scheduleGlow();
+                }, 8000);
+            }, delay);
+        }
+
         function scheduleGoldenCookie() {
             if (goldenTimer) clearTimeout(goldenTimer);
             if (!goldenEnabled) return;
@@ -484,6 +533,7 @@
         function renderUI() {
             document.getElementById('username').textContent = userName + (extra.prestige_bonus ? ' 🔥' : '');
             document.getElementById('score').textContent = score;
+            document.getElementById('star-display').textContent = extra.stars || 0;
             const parts = ['+' + perClick() + ' за клик'];
             if (autoClicker) parts.push('⚡ автокликер');
             document.getElementById('multiplier').textContent = parts.join(' · ');
@@ -506,6 +556,15 @@
             }
 
             applySkin();
+            const cookie = document.getElementById('cookie');
+            const badge = document.getElementById('x2-badge');
+            if (glowActive) {
+                cookie.classList.add('glow');
+                badge.style.display = 'flex';
+            } else {
+                cookie.classList.remove('glow');
+                badge.style.display = 'none';
+            }
             const pBtn = document.getElementById('prestige-btn');
             if (score >= 10000) {
                 pBtn.style.display = 'inline-block';
@@ -605,7 +664,8 @@
             }).join('');
 
             const skinsHtml = renderSkinsHtml();
-            el.innerHTML += skinsHtml;
+            const starHtml = renderStarShopHtml();
+            el.innerHTML += skinsHtml + starHtml;
 
             el.querySelectorAll('.shop-btn:not(.bought):not([disabled])').forEach(btn => {
                 btn.addEventListener('click', async () => {
@@ -652,14 +712,47 @@
                 });
             });
 
-            document.getElementById('lb-sort-tabs').querySelectorAll('.tab').forEach(btn => {
-                btn.addEventListener('click', () => {
-                    document.getElementById('lb-sort-tabs').querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            el.querySelectorAll('[data-star]').forEach(btn => {
+                btn.addEventListener('click', async () => {
+                    const res = await fetch('/api/star/buy', {
+                        method: 'POST', headers: { 'Content-Type': 'application/json', 'x-telegram-user-id': userId },
+                        body: JSON.stringify({ item: btn.dataset.star }),
+                    });
+                    const d = await res.json();
+                    if (d.ok) {
+                        extra = d.extra;
+                        renderUI(); scheduleSave();
+                    } else {
+                        document.getElementById('status').textContent = d.error;
+                    }
+                });
+            });
+
+            document.getElementById('lb-sort-tabs').querySelectorAll('.sort-tab').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    document.getElementById('lb-sort-tabs').querySelectorAll('.sort-tab').forEach(t => t.classList.remove('active'));
                     btn.classList.add('active');
                     lbSort = btn.dataset.sort;
                     loadLeaderboard();
                 });
             });
+        }
+
+        function renderStarShopHtml() {
+            const items = [
+                { id: 'perm_click', name: '👆 +1 к клику навсегда', cost: 5 },
+                { id: 'perm_attack', name: '💢 +10% к краже', cost: 8 },
+                { id: 'perm_start', name: '🚀 +1000 🍪 при старте', cost: 3 },
+            ];
+            const boughtPermClick = extra.prestige_bonus > 0 || false;
+            const stars = extra.stars || 0;
+            let html = '<div style="margin-top:16px;font-weight:700;font-size:14px">⭐ Магазин звёзд (у тебя ' + stars + ' ⭐)</div>';
+            items.forEach(item => {
+                const canBuy = stars >= item.cost;
+                html += '<div class="shop-item"><div class="shop-info"><div class="shop-name">' + item.name + '</div><div class="shop-desc">' + item.cost + ' ⭐</div></div><button class="shop-btn" data-star="' + item.id + '" ' + (!canBuy ? 'disabled' : '') + '>Купить</button></div>';
+            });
+            return html;
         }
 
         function renderSkinsHtml() {
@@ -740,6 +833,7 @@
 
                 goldenEnabled = true;
                 scheduleGoldenCookie();
+                scheduleGlow();
 
                 if (d.new_achievements && d.new_achievements.length > 0) {
                     Sound.achievement();
@@ -781,7 +875,7 @@
 
         async function loadLeaderboard() {
             try {
-                document.getElementById('lb-sort-tabs').querySelectorAll('.tab').forEach(t => {
+                document.getElementById('lb-sort-tabs').querySelectorAll('.sort-tab').forEach(t => {
                     t.classList.toggle('active', t.dataset.sort === lbSort);
                 });
                 const res = await fetch('/api/leaderboard?sort=' + lbSort);
@@ -863,9 +957,11 @@
             const e = extra;
             const totalAch = 8;
             const earnedAch = (e.achievements || []).length;
+            const notifOn = e.notifications_enabled !== false;
             let html = `
-                <div style="font-weight:700;font-size:14px;margin-bottom:8px">📊 Статистика</div>
+                <div style="font-weight:700;font-size:14px;margin-bottom:8px">👤 Профиль</div>
                 <div class="shop-item"><span class="shop-icon">🍪</span><div class="shop-info"><div class="shop-name">${score}</div><div class="shop-desc">Текущий счёт</div></div></div>
+                <div class="shop-item"><span class="shop-icon">⭐</span><div class="shop-info"><div class="shop-name">${e.stars || 0}</div><div class="shop-desc">Звёзды (за достижения)</div></div></div>
                 <div class="shop-item"><span class="shop-icon">📈</span><div class="shop-info"><div class="shop-name">${e.highest_score || 0}</div><div class="shop-desc">Рекорд</div></div></div>
                 <div class="shop-item"><span class="shop-icon">🔥</span><div class="shop-info"><div class="shop-name">${e.prestige_bonus || 0}</div><div class="shop-desc">Престиж</div></div></div>
                 <div class="shop-item"><span class="shop-icon">👆</span><div class="shop-info"><div class="shop-name">${e.total_clicks || 0}</div><div class="shop-desc">Всего кликов</div></div></div>
@@ -873,7 +969,11 @@
                 <div class="shop-item"><span class="shop-icon">🏆</span><div class="shop-info"><div class="shop-name">${earnedAch} / ${totalAch}</div><div class="shop-desc">Достижений</div></div></div>
                 <div class="shop-item"><span class="shop-icon">🎨</span><div class="shop-info"><div class="shop-name">${ownedSkins.length}</div><div class="shop-desc">Скинов в коллекции</div></div></div>
                 <div class="shop-item"><span class="shop-icon">🔗</span><div class="shop-info"><div class="shop-name" id="ref-link" style="font-size:12px;word-break:break-all">Загрузка...</div><div class="shop-desc">Реферальная ссылка (приведи друга → +100 🍪)</div></div><button class="shop-btn" id="ref-copy-btn" onclick="copyRefLink()">Копировать</button></div>
-                <div style="font-weight:700;font-size:14px;margin:16px 0 8px">🎯 Достижения</div>
+                <div class="toggle-wrap">
+                    <button class="toggle ${notifOn ? 'on' : ''}" id="notif-toggle" onclick="toggleNotifications()"></button>
+                    <span style="font-size:13px">Уведомления в Telegram ${notifOn ? 'вкл' : 'выкл'}</span>
+                </div>
+                <div style="font-weight:700;font-size:14px;margin:12px 0 8px">🎯 Достижения</div>
                 <div id="ach-list"></div>
             `;
             document.getElementById('stats-content').innerHTML = html;
@@ -881,6 +981,17 @@
             fetch('/api/referral', { headers: { 'x-telegram-user-id': userId } }).then(r => r.json()).then(d => {
                 document.getElementById('ref-link').textContent = d.referral_link || '';
             });
+        }
+
+        async function toggleNotifications() {
+            const res = await fetch('/api/notifications/toggle', {
+                method: 'POST', headers: { 'Content-Type': 'application/json', 'x-telegram-user-id': userId },
+            });
+            const d = await res.json();
+            if (d.ok) {
+                extra.notifications_enabled = d.notifications_enabled;
+                renderStats();
+            }
         }
 
         async function renderAchievementsList() {

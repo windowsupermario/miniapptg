@@ -49,14 +49,20 @@ SKINS = {
 }
 
 ACHIEVEMENTS = [
-    {"id": "score_100",    "name": "Новичок",       "desc": "Накопить 100 🍪",        "icon": "🌱",  "check": lambda e: e["highest_score"] >= 100},
-    {"id": "score_1000",   "name": "Кликер-любитель","desc": "Накопить 1000 🍪",       "icon": "🍪",  "check": lambda e: e["highest_score"] >= 1000},
-    {"id": "score_5000",   "name": "Пекарня",        "desc": "Накопить 5000 🍪",       "icon": "🏭",  "check": lambda e: e["highest_score"] >= 5000},
-    {"id": "score_10000",  "name": "Магнат",         "desc": "Накопить 10000 🍪",      "icon": "💰",  "check": lambda e: e["highest_score"] >= 10000},
-    {"id": "attack_1",     "name": "Грабитель",      "desc": "Атаковать 1 раз",        "icon": "💢",  "check": lambda e: e["total_attacks"] >= 1},
-    {"id": "attack_10",    "name": "Разбойник",      "desc": "Атаковать 10 раз",       "icon": "🗡️",  "check": lambda e: e["total_attacks"] >= 10},
-    {"id": "prestige_1",   "name": "Феникс",         "desc": "Сделать престиж 1 раз",  "icon": "🔥",  "check": lambda e: e["prestige_bonus"] >= 1},
-    {"id": "prestige_5",   "name": "Легенда",        "desc": "Сделать престиж 5 раз",   "icon": "🏆",  "check": lambda e: e["prestige_bonus"] >= 5},
+    {"id": "score_100",    "name": "Новичок",       "desc": "Накопить 100 🍪",        "icon": "🌱",  "stars": 1,  "check": lambda e: e["highest_score"] >= 100},
+    {"id": "score_1000",   "name": "Кликер-любитель","desc": "Накопить 1000 🍪",       "icon": "🍪",  "stars": 2,  "check": lambda e: e["highest_score"] >= 1000},
+    {"id": "score_5000",   "name": "Пекарня",        "desc": "Накопить 5000 🍪",       "icon": "🏭",  "stars": 3,  "check": lambda e: e["highest_score"] >= 5000},
+    {"id": "score_10000",  "name": "Магнат",         "desc": "Накопить 10000 🍪",      "icon": "💰",  "stars": 5,  "check": lambda e: e["highest_score"] >= 10000},
+    {"id": "attack_1",     "name": "Грабитель",      "desc": "Атаковать 1 раз",        "icon": "💢",  "stars": 1,  "check": lambda e: e["total_attacks"] >= 1},
+    {"id": "attack_10",    "name": "Разбойник",      "desc": "Атаковать 10 раз",       "icon": "🗡️",  "stars": 3,  "check": lambda e: e["total_attacks"] >= 10},
+    {"id": "prestige_1",   "name": "Феникс",         "desc": "Сделать престиж 1 раз",  "icon": "🔥",  "stars": 5,  "check": lambda e: e["prestige_bonus"] >= 1},
+    {"id": "prestige_5",   "name": "Легенда",        "desc": "Сделать престиж 5 раз",   "icon": "🏆",  "stars": 10, "check": lambda e: e["prestige_bonus"] >= 5},
+]
+
+STAR_SHOP = [
+    {"id": "perm_click",  "name": "👆 +1 к клику навсегда",  "cost": 5,  "effect": lambda e: e.update({"prestige_bonus": e.get("prestige_bonus", 0) + 1})},
+    {"id": "perm_attack", "name": "💢 +10% к краже",         "cost": 8,  "effect": lambda e: e.update({"attack_bonus_pct": min(e.get("attack_bonus_pct", 0) + 10, 50)})},
+    {"id": "perm_start",  "name": "🚀 +1000 🍪 при старте",   "cost": 3,  "effect": lambda e: e.update({"start_bonus": e.get("start_bonus", 0) + 1000})},
 ]
 
 
@@ -94,6 +100,7 @@ def check_achievements(extra):
     for a in ACHIEVEMENTS:
         if a["id"] not in earned and a["check"](extra):
             new_ones.append(a["id"])
+            extra["stars"] = extra.get("stars", 0) + a.get("stars", 0)
     if new_ones:
         earned.update(new_ones)
         extra["achievements"] = list(earned)
@@ -320,6 +327,44 @@ async def handle_daily(request: Request):
                    state["last_attack"], extra=extra)
 
     return {"ok": True, "bonus": DAILY_BONUS, "new_score": new_score}
+
+
+@app.post("/api/star/buy")
+async def handle_star_buy(request: Request):
+    user_id = str(request.headers.get("x-telegram-user-id", "guest"))
+    body = await request.json()
+    item_id = body.get("item", "")
+    item = next((s for s in STAR_SHOP if s["id"] == item_id), None)
+    if not item:
+        return {"ok": False, "error": "Неизвестный товар"}
+
+    state = await get_user(user_id)
+    extra = state.get("extra", dict(DEFAULT_EXTRA))
+
+    if extra.get("stars", 0) < item["cost"]:
+        return {"ok": False, "error": "Недостаточно ⭐"}
+
+    extra["stars"] -= item["cost"]
+    item["effect"](extra)
+    await set_user(user_id, state["user_name"], state["score"], state["active_upgrades"],
+                   state["last_attack"], extra=extra)
+    return {"ok": True, "stars": extra["stars"], "extra": extra}
+
+
+@app.post("/api/notifications/toggle")
+async def handle_notifications_toggle(request: Request):
+    user_id = str(request.headers.get("x-telegram-user-id", "guest"))
+    state = await get_user(user_id)
+    extra = state.get("extra", dict(DEFAULT_EXTRA))
+    extra["notifications_enabled"] = not extra.get("notifications_enabled", True)
+    await set_user(user_id, state["user_name"], state["score"], state["active_upgrades"],
+                   state["last_attack"], extra=extra)
+    return {"ok": True, "notifications_enabled": extra["notifications_enabled"]}
+
+
+@app.get("/api/star/shop")
+async def handle_star_shop():
+    return {"items": STAR_SHOP}
 
 
 @app.post("/api/spy")
