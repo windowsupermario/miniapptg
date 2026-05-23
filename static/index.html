@@ -215,6 +215,9 @@
             border-radius: 50%; background: #fff; transition: transform 0.2s;
         }
         .toggle.on::after { transform: translateX(20px); }
+        .low-energy { color: #f44336 !important; }
+        .mid-energy { color: #ff9800 !important; }
+        .high-energy { color: #4caf50 !important; }
     </style>
 </head>
 <body>
@@ -232,6 +235,13 @@
             <div class="score" id="score">0</div>
             <div class="combo" id="combo"></div>
             <div class="multiplier" id="multiplier">+1 за клик</div>
+            <div style="display:flex;justify-content:center;gap:16px;margin:4px 0;font-size:13px">
+                <span id="energy-display" style="color:#4caf50">⚡ 100/100</span>
+                <span id="fuel-display" style="color:#ff9800">⛽ 0</span>
+            </div>
+            <div style="width:200px;height:6px;background:#eee;border-radius:4px;margin:0 auto 6px;overflow:hidden">
+                <div id="energy-bar" style="width:100%;height:100%;background:#4caf50;border-radius:4px;transition:width 0.3s"></div>
+            </div>
             <div id="prestige-badge" class="prestige-badge" style="display:none"></div>
             <div id="shield-indicator" class="shield-indicator" style="display:none">🛡️ Щит: <span id="shield-timer">5:00</span></div>
             <div id="safe-indicator" class="safe-indicator" style="display:none">🔒 Сейф: <span id="safe-pct">30%</span></div>
@@ -284,6 +294,8 @@
         let combo = 0, lastClickTime = 0, clicksSinceSave = 0;
         let goldenEnabled = false;
         let glowActive = false, glowTimer = null;
+        let energy = 100, maxEnergy = 100, fuel = 0;
+        let activePlanets = {}, planetsBoost = {}, attackBonus = 0;
 
         const SKINS = {
             default: { name: 'Классическая', cost: 0, gradient: 'radial-gradient(circle at 35% 35%, #f5d68a, #c8943c)', chips: '#6b4226' },
@@ -319,6 +331,11 @@
                 else if (d.field === 'boost') boostActive = true;
             }
             clickBonus += (extra.prestige_bonus || 0);
+            if (planetsBoost.click_bonus) clickBonus += planetsBoost.click_bonus;
+            if (planetsBoost.auto_speed) { autoClicker = 2; }
+            if (planetsBoost.auto_clicker) { autoClicker = autoClicker > 0 ? 2 : 0; }
+            if (planetsBoost.shield) shieldUntil = Math.max(shieldUntil, now + planetsBoost.shield);
+            attackBonus = planetsBoost.attack_bonus || 0;
             if (!autoClicker && autoTimer) { clearInterval(autoTimer); autoTimer = null; }
             const boostEl = document.getElementById('boost-indicator');
             if (boostActive) {
@@ -578,8 +595,20 @@
                 pBtn.style.display = 'none';
             }
 
+            renderEnergy();
             renderCombo();
             renderShop();
+        }
+
+        function renderEnergy() {
+            const el = document.getElementById('energy-display');
+            el.textContent = '⚡ ' + Math.floor(energy) + '/' + maxEnergy;
+            const pct = energy / maxEnergy;
+            el.className = pct < 0.2 ? 'low-energy' : pct < 0.5 ? 'mid-energy' : 'high-energy';
+            const bar = document.getElementById('energy-bar');
+            bar.style.width = Math.max(0, pct * 100) + '%';
+            bar.style.background = pct < 0.2 ? '#f44336' : pct < 0.5 ? '#ff9800' : '#4caf50';
+            document.getElementById('fuel-display').textContent = '⛽ ' + fuel;
         }
 
         function renderCombo() {
@@ -665,7 +694,9 @@
 
             const skinsHtml = renderSkinsHtml();
             const starHtml = renderStarShopHtml();
-            el.innerHTML += skinsHtml + starHtml;
+            const planetHtml = renderPlanetsHtml();
+            const legendHtml = renderLegendHtml();
+            el.innerHTML += skinsHtml + starHtml + planetHtml + legendHtml;
 
             el.querySelectorAll('.shop-btn:not(.bought):not([disabled])').forEach(btn => {
                 btn.addEventListener('click', async () => {
@@ -728,6 +759,46 @@
                 });
             });
 
+            el.querySelectorAll('[data-planet]').forEach(btn => {
+                btn.addEventListener('click', async () => {
+                    const res = await fetch('/api/planet/travel', {
+                        method: 'POST', headers: { 'Content-Type': 'application/json', 'x-telegram-user-id': userId },
+                        body: JSON.stringify({ planet: btn.dataset.planet }),
+                    });
+                    const d = await res.json();
+                    if (d.ok) {
+                        fuel = d.fuel;
+                        activePlanets = d.active_planets || {};
+                        planetsBoost = d.planets_boost || {};
+                        recalcDerived();
+                        if (autoClicker) startAutoClicker();
+                        showEventPopup('🚀', d.planet_name, 'Полёт к ' + d.planet_name + '!');
+                        renderUI(); scheduleSave();
+                    } else {
+                        document.getElementById('status').textContent = d.error;
+                    }
+                });
+            });
+
+            el.querySelectorAll('[data-legend]').forEach(btn => {
+                btn.addEventListener('click', async () => {
+                    const res = await fetch('/api/legend/buy', {
+                        method: 'POST', headers: { 'Content-Type': 'application/json', 'x-telegram-user-id': userId },
+                        body: JSON.stringify({ item: btn.dataset.legend }),
+                    });
+                    const d = await res.json();
+                    if (d.ok) {
+                        score = d.score;
+                        extra = d.extra;
+                        recalcDerived();
+                        showEventPopup('✨', 'Легендарный апгрейд!', 'Куплено!');
+                        renderUI(); scheduleSave();
+                    } else {
+                        document.getElementById('status').textContent = d.error;
+                    }
+                });
+            });
+
             document.getElementById('lb-sort-tabs').querySelectorAll('.sort-tab').forEach(btn => {
                 btn.addEventListener('click', (e) => {
                     e.stopPropagation();
@@ -783,7 +854,9 @@
             const cookie = document.getElementById('cookie');
             autoTimer = setInterval(() => {
                 if (!autoClicker) { clearInterval(autoTimer); autoTimer = null; return; }
-                score++;
+                if (energy <= 0) return;
+                score += autoClicker;
+                energy = Math.max(0, energy - 1);
                 renderUI(); scheduleSave();
                 cookie.style.transform = 'scale(0.95)';
                 cookie.style.boxShadow = '0 2px 8px rgba(0,0,0,0.2), inset 0 -2px 4px rgba(0,0,0,0.1)';
@@ -801,13 +874,23 @@
 
         async function saveToServer() {
             try {
-                await fetch('/api/user', {
+                const res = await fetch('/api/user', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', 'x-telegram-user-id': userId },
                     body: JSON.stringify({ user_name: userName, score, clicks_since_save: clicksSinceSave }),
                 });
+                const d = await res.json();
+                if (d.ok !== false) {
+                    energy = d.energy !== undefined ? d.energy : energy;
+                    maxEnergy = d.max_energy !== undefined ? d.max_energy : maxEnergy;
+                    fuel = d.fuel !== undefined ? d.fuel : fuel;
+                    if (d.decayed) {
+                        document.getElementById('status').textContent = '🏚️ Аренда: -1% печенья!';
+                        setTimeout(() => document.getElementById('status').textContent = '✓ Сохранено', 3000);
+                    }
+                }
                 clicksSinceSave = 0;
-                document.getElementById('status').textContent = '✓ Сохранено';
+                if (!(d && d.decayed)) document.getElementById('status').textContent = '✓ Сохранено';
             } catch { document.getElementById('status').textContent = '✗ Ошибка'; }
         }
 
@@ -824,6 +907,11 @@
                 extra = d.extra || {};
                 currentSkin = extra.current_skin || 'default';
                 ownedSkins = extra.owned_skins || ['default'];
+                energy = d.energy || 100;
+                maxEnergy = d.max_energy || 100;
+                fuel = d.fuel || 0;
+                activePlanets = d.active_planets || {};
+                planetsBoost = d.planets_boost || {};
                 recalcDerived();
                 if (autoClicker) startAutoClicker();
                 renderUI();
@@ -955,7 +1043,7 @@
 
         function renderStats() {
             const e = extra;
-            const totalAch = 10;
+            const totalAch = 19;
             const earnedAch = (e.achievements || []).length;
             const notifOn = e.notifications_enabled !== false;
             let html = `
@@ -994,7 +1082,44 @@
             }
         }
 
-        async function renderAchievementsList() {
+        async         function renderPlanetsHtml() {
+            const now = Math.floor(Date.now() / 1000);
+            const planets = [
+                { key: 'mars', name: 'Марс', fuel_cost: 10, desc: '+2 к клику на 1ч' },
+                { key: 'venus', name: 'Венера', fuel_cost: 25, desc: 'Автокликер х2 на 1ч' },
+                { key: 'jupiter', name: 'Юпитер', fuel_cost: 50, desc: 'Щит на 1ч' },
+                { key: 'saturn', name: 'Сатурн', fuel_cost: 100, desc: '+50% к краже на 1ч' },
+                { key: 'neptune', name: 'Нептун', fuel_cost: 200, desc: 'Двойной автокликер на 1ч' },
+            ];
+            let html = '<div style="margin-top:16px;font-weight:700;font-size:14px">🚀 Космос (⛽ ' + fuel + ' топлива)</div>';
+            planets.forEach(p => {
+                const expiry = activePlanets[p.key] || 0;
+                const isActive = expiry > now;
+                const canGo = fuel >= p.fuel_cost && !isActive;
+                html += '<div class="shop-item"><div class="shop-icon" style="font-size:24px">🪐</div><div class="shop-info"><div class="shop-name">' + p.name + '</div><div class="shop-desc">' + p.desc + ' · ' + p.fuel_cost + ' ⛽' + (isActive ? ' · ⏱ ' + timeStr(expiry) : '') + '</div></div><button class="shop-btn' + (isActive ? ' bought' : '') + '" data-planet="' + p.key + '" ' + (!canGo ? 'disabled' : '') + '>' + (isActive ? '✓' : 'Лететь') + '</button></div>';
+            });
+            return html;
+        }
+
+        function renderLegendHtml() {
+            const prestige = extra.prestige_bonus || 0;
+            if (prestige < 10) return '<div style="margin-top:16px;font-weight:700;font-size:14px;opacity:0.5">✨ Легендарное (открой после 10 престижа)</div>';
+            const bought = extra.legendary_bought || [];
+            const items = [
+                { key: 'legend_click', name: '✨ +5 к клику навсегда', cost: 5000 },
+                { key: 'legend_auto', name: '✨ Автокликер х2', cost: 10000 },
+                { key: 'legend_energy', name: '✨ +50 энергии макс', cost: 8000 },
+            ];
+            let html = '<div style="margin-top:16px;font-weight:700;font-size:14px;color:#9c27b0">✨ Легендарное 🌟</div>';
+            items.forEach(item => {
+                const isBought = bought.includes(item.key);
+                const canBuy = score >= item.cost && !isBought;
+                html += '<div class="shop-item"><div class="shop-info"><div class="shop-name">' + item.name + '</div><div class="shop-desc">' + item.cost + ' 🍪</div></div><button class="shop-btn' + (isBought ? ' bought' : '') + '" data-legend="' + item.key + '" ' + (!canBuy ? 'disabled' : '') + '>' + (isBought ? '✓' : 'Купить') + '</button></div>';
+            });
+            return html;
+        }
+
+        function renderAchievementsList() {
             const res = await fetch('/api/achievements');
             const data = await res.json();
             const list = data.achievements || [];
@@ -1015,7 +1140,21 @@
             }
         }
 
+        function regenEnergy() {
+            if (energy < maxEnergy) {
+                energy = Math.min(maxEnergy, energy + ENERGY_REGEN_RATE);
+                renderEnergy();
+            }
+        }
+
+        const ENERGY_REGEN_RATE = 3;
+        setInterval(regenEnergy, 1000);
+
         document.getElementById('cookie').addEventListener('click', (e) => {
+            if (energy <= 0) {
+                document.getElementById('status').textContent = '⚡ Нет энергии! Подожди...';
+                return;
+            }
             const now = Date.now();
             if (now - lastClickTime < 3000) {
                 combo++;
@@ -1033,6 +1172,7 @@
             const comboExtra = gain - baseGain;
             score += gain;
             clicksSinceSave++;
+            energy = Math.max(0, energy - 1);
             renderUI(); scheduleSave();
             showFloatingText(e.clientX - 16, e.clientY - 16, '+' + gain, 'gain');
             if (comboExtra > 0) {

@@ -15,6 +15,12 @@ DEFAULT_EXTRA = {
     "stars": 0,
     "notifications_enabled": True,
     "referrals_count": 0,
+    "fuel": 0,
+    "energy": 100,
+    "last_energy_time": 0,
+    "last_decay_time": 0,
+    "attack_bonus_pct": 0,
+    "start_bonus": 0,
 }
 
 if DATABASE_URL:

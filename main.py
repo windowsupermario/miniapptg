@@ -32,6 +32,11 @@ DAILY_BONUS = 200
 SPY_COST = 100
 REFERRAL_BONUS = 100
 
+MAX_ENERGY = 100
+ENERGY_REGEN_RATE = 3
+ENERGY_PER_CLICK = 1
+FUEL_PER_CLICKS = 50
+
 GOLDEN_REWARDS = [
     {"type": "cookies", "value": 50,  "icon": "🍪", "text": "+50 🍪"},
     {"type": "cookies", "value": 100, "icon": "🍪", "text": "+100 🍪"},
@@ -49,17 +54,40 @@ SKINS = {
 }
 
 ACHIEVEMENTS = [
-    {"id": "score_100",    "name": "Новичок",       "desc": "Накопить 100 🍪",        "icon": "🌱",  "stars": 1,  "check": lambda e: e["highest_score"] >= 100},
-    {"id": "score_1000",   "name": "Кликер-любитель","desc": "Накопить 1000 🍪",       "icon": "🍪",  "stars": 2,  "check": lambda e: e["highest_score"] >= 1000},
-    {"id": "score_5000",   "name": "Пекарня",        "desc": "Накопить 5000 🍪",       "icon": "🏭",  "stars": 3,  "check": lambda e: e["highest_score"] >= 5000},
-    {"id": "score_10000",  "name": "Магнат",         "desc": "Накопить 10000 🍪",      "icon": "💰",  "stars": 5,  "check": lambda e: e["highest_score"] >= 10000},
-    {"id": "attack_1",     "name": "Грабитель",      "desc": "Атаковать 1 раз",        "icon": "💢",  "stars": 1,  "check": lambda e: e["total_attacks"] >= 1},
-    {"id": "attack_10",    "name": "Разбойник",      "desc": "Атаковать 10 раз",       "icon": "🗡️",  "stars": 3,  "check": lambda e: e["total_attacks"] >= 10},
-    {"id": "prestige_1",   "name": "Феникс",         "desc": "Сделать престиж 1 раз",  "icon": "🔥",  "stars": 5,  "check": lambda e: e["prestige_bonus"] >= 1},
-    {"id": "prestige_5",   "name": "Легенда",        "desc": "Сделать престиж 5 раз",   "icon": "🏆",  "stars": 10, "check": lambda e: e["prestige_bonus"] >= 5},
-    {"id": "referral_1",   "name": "Друг",           "desc": "Привести 1 друга",         "icon": "🤝",  "stars": 3,  "check": lambda e: e.get("referrals_count", 0) >= 1},
-    {"id": "referral_3",   "name": "Компания",       "desc": "Привести 3 друзей",        "icon": "👥",  "stars": 5,  "check": lambda e: e.get("referrals_count", 0) >= 3},
+    {"id": "score_100",     "name": "Новичок",           "desc": "Накопить 100 🍪",         "icon": "🌱",  "stars": 1,  "check": lambda e: e["highest_score"] >= 100},
+    {"id": "score_1000",    "name": "Кликер-любитель",   "desc": "Накопить 1000 🍪",        "icon": "🍪",  "stars": 2,  "check": lambda e: e["highest_score"] >= 1000},
+    {"id": "score_5000",    "name": "Пекарня",           "desc": "Накопить 5000 🍪",        "icon": "🏭",  "stars": 3,  "check": lambda e: e["highest_score"] >= 5000},
+    {"id": "score_10000",   "name": "Магнат",            "desc": "Накопить 10000 🍪",       "icon": "💰",  "stars": 5,  "check": lambda e: e["highest_score"] >= 10000},
+    {"id": "score_25000",   "name": "Олигарх",           "desc": "Накопить 25000 🍪",       "icon": "💎",  "stars": 8,  "check": lambda e: e["highest_score"] >= 25000},
+    {"id": "score_50000",   "name": "Миллионер",         "desc": "Накопить 50000 🍪",       "icon": "👑",  "stars": 12, "check": lambda e: e["highest_score"] >= 50000},
+    {"id": "score_100000",  "name": "Король печенек",    "desc": "Накопить 100000 🍪",      "icon": "🏰",  "stars": 20, "check": lambda e: e["highest_score"] >= 100000},
+    {"id": "score_500000",  "name": "Император",         "desc": "Накопить 500000 🍪",      "icon": "🗿",  "stars": 50, "check": lambda e: e["highest_score"] >= 500000},
+    {"id": "score_1000000", "name": "Бог печенья",       "desc": "Накопить 1 000 000 🍪",   "icon": "✨",  "stars": 100,"check": lambda e: e["highest_score"] >= 1000000},
+    {"id": "attack_1",      "name": "Грабитель",         "desc": "Атаковать 1 раз",         "icon": "💢",  "stars": 1,  "check": lambda e: e["total_attacks"] >= 1},
+    {"id": "attack_10",     "name": "Разбойник",         "desc": "Атаковать 10 раз",        "icon": "🗡️",  "stars": 3,  "check": lambda e: e["total_attacks"] >= 10},
+    {"id": "attack_50",     "name": "Бандит",            "desc": "Атаковать 50 раз",        "icon": "💀",  "stars": 8,  "check": lambda e: e["total_attacks"] >= 50},
+    {"id": "attack_100",    "name": "Мафия",             "desc": "Атаковать 100 раз",       "icon": "🔫",  "stars": 15, "check": lambda e: e["total_attacks"] >= 100},
+    {"id": "prestige_1",    "name": "Феникс",            "desc": "Сделать престиж 1 раз",   "icon": "🔥",  "stars": 5,  "check": lambda e: e["prestige_bonus"] >= 1},
+    {"id": "prestige_5",    "name": "Легенда",           "desc": "Сделать престиж 5 раз",   "icon": "🏆",  "stars": 10, "check": lambda e: e["prestige_bonus"] >= 5},
+    {"id": "prestige_10",   "name": "Миф",              "desc": "Сделать престиж 10 раз",  "icon": "🌟",  "stars": 25, "check": lambda e: e["prestige_bonus"] >= 10},
+    {"id": "prestige_25",   "name": "Бессмертный",       "desc": "Сделать престиж 25 раз",  "icon": "♾️",  "stars": 50, "check": lambda e: e["prestige_bonus"] >= 25},
+    {"id": "referral_1",    "name": "Друг",              "desc": "Привести 1 друга",        "icon": "🤝",  "stars": 3,  "check": lambda e: e.get("referrals_count", 0) >= 1},
+    {"id": "referral_3",    "name": "Компания",          "desc": "Привести 3 друзей",       "icon": "👥",  "stars": 5,  "check": lambda e: e.get("referrals_count", 0) >= 3},
 ]
+
+LEGENDARY_UPGRADES = [
+    {"id": "legend_click", "name": "✨ +5 к клику навсегда",  "cost": 5000,  "min_prestige": 10, "effect": lambda e: e.update({"prestige_bonus": e.get("prestige_bonus", 0) + 5})},
+    {"id": "legend_auto",  "name": "✨ Автокликер х2",        "cost": 10000, "min_prestige": 10, "effect": lambda e: e.update({"auto_speed": 1000})},
+    {"id": "legend_energy","name": "✨ +50 энергии макс",     "cost": 8000,  "min_prestige": 10, "effect": lambda e: e.update({"max_energy": 150})},
+]
+
+PLANETS = {
+    "mars":    {"name": "Марс",    "fuel_cost": 10,   "duration": 3600, "effect": "click_bonus", "value": 2,   "desc": "+2 к клику на 1ч"},
+    "venus":   {"name": "Венера",  "fuel_cost": 25,   "duration": 3600, "effect": "auto_speed",  "value": 1000,"desc": "Автокликер х2 на 1ч"},
+    "jupiter": {"name": "Юпитер",  "fuel_cost": 50,   "duration": 3600, "effect": "shield",     "value": 3600, "desc": "Щит на 1ч"},
+    "saturn":  {"name": "Сатурн",  "fuel_cost": 100,  "duration": 3600, "effect": "attack_bonus","value": 50,  "desc": "+50% к краже на 1ч"},
+    "neptune": {"name": "Нептун",  "fuel_cost": 200,  "duration": 3600, "effect": "auto_clicker","value": 2,   "desc": "Двойной автокликер на 1ч"},
+}
 
 STAR_SHOP = [
     {"id": "perm_click",  "name": "👆 +1 к клику навсегда",  "cost": 5,  "effect": lambda e: e.update({"prestige_bonus": e.get("prestige_bonus", 0) + 1})},
@@ -94,6 +122,47 @@ def calc_derived_stats(active_upgrades):
 
 def calc_click_bonus(click_bonus_from_upgrades, extra):
     return click_bonus_from_upgrades + extra.get("prestige_bonus", 0)
+
+
+def calc_energy(extra):
+    now = int(time.time())
+    max_e = extra.get("max_energy", MAX_ENERGY)
+    energy = extra.get("energy", max_e)
+    last_time = extra.get("last_energy_time", 0)
+    if last_time:
+        elapsed = now - last_time
+        regen = elapsed * ENERGY_REGEN_RATE
+        energy = min(max_e, int(energy + regen))
+    extra["energy"] = energy
+    extra["last_energy_time"] = now
+    return energy
+
+
+def apply_decay(state, extra):
+    now = int(time.time())
+    last_decay = extra.get("last_decay_time", 0)
+    if last_decay == 0:
+        extra["last_decay_time"] = now
+        return state["score"]
+    hours_passed = (now - last_decay) // 3600
+    if hours_passed <= 0:
+        return state["score"]
+    score = state["score"]
+    for _ in range(min(hours_passed, 24)):
+        score = max(0, score - score // 100)
+    extra["last_decay_time"] = now - ((now - last_decay) % 3600)
+    return score
+
+
+def calc_planets_bonus(active_planets):
+    now = int(time.time())
+    active_planets = {k: v for k, v in active_planets.items() if v > now}
+    boost = {}
+    for planet_key, expiry in active_planets.items():
+        planet = PLANETS.get(planet_key)
+        if planet:
+            boost[planet["effect"]] = max(boost.get(planet["effect"], 0), planet["value"])
+    return boost, active_planets
 
 
 def check_achievements(extra):
@@ -153,23 +222,28 @@ async def handle_get_user(request: Request, ref: str = ""):
                            referrer["last_attack"], extra=ref_extra)
         except:
             pass
-        await set_user(user_id, state["user_name"], state["score"], state["active_upgrades"],
-                       state["last_attack"], extra=extra)
+
+    decayed_score = apply_decay(state, extra)
+    state["score"] = decayed_score
+
+    calc_energy(extra)
+
+    planets_boost, active_planets = calc_planets_bonus(extra.get("active_planets", {}))
+    extra["active_planets"] = active_planets
+
     cb, ac, su, sp = calc_derived_stats(state["active_upgrades"])
-    extra = state.get("extra", dict(DEFAULT_EXTRA))
     click_bonus = calc_click_bonus(cb, extra)
 
     new_achs = check_achievements(extra)
     notifs = state.get("notifications", [])
 
-    if notifs or new_achs:
-        await set_user(user_id, state["user_name"], state["score"], state["active_upgrades"],
-                       state["last_attack"], [], extra)
+    await set_user(user_id, state["user_name"], decayed_score, state["active_upgrades"],
+                   state["last_attack"], [] if (notifs or new_achs) else state.get("notifications"), extra)
 
     return {
         "user_id": user_id,
         "user_name": state["user_name"],
-        "score": state["score"],
+        "score": decayed_score,
         "click_bonus": click_bonus,
         "auto_clicker": ac,
         "shield_until": su,
@@ -178,6 +252,11 @@ async def handle_get_user(request: Request, ref: str = ""):
         "notifications": notifs,
         "extra": extra,
         "new_achievements": [a["name"] for a in new_achs],
+        "energy": extra.get("energy", MAX_ENERGY),
+        "max_energy": extra.get("max_energy", MAX_ENERGY),
+        "fuel": extra.get("fuel", 0),
+        "active_planets": active_planets,
+        "planets_boost": planets_boost,
     }
 
 
@@ -188,17 +267,31 @@ async def handle_update_user(request: Request):
     state = await get_user(user_id)
     extra = state.get("extra", dict(DEFAULT_EXTRA))
     new_extra = {**extra}
-    new_extra["total_clicks"] = new_extra.get("total_clicks", 0) + body.get("clicks_since_save", 0)
+    clicks = body.get("clicks_since_save", 0)
+    new_extra["total_clicks"] = new_extra.get("total_clicks", 0) + clicks
     new_extra["highest_score"] = max(new_extra.get("highest_score", 0), body.get("score", 0))
+
+    new_score = body.get("score", 0)
+    decayed = apply_decay({"score": new_score}, new_extra)
+    if decayed != new_score:
+        new_score = decayed
+
+    max_e = new_extra.get("max_energy", MAX_ENERGY)
+    energy = calc_energy(new_extra)
+    energy = max(0, energy - clicks * ENERGY_PER_CLICK)
+    new_extra["energy"] = energy
+
+    new_extra["fuel"] = new_extra.get("fuel", 0) + clicks // FUEL_PER_CLICKS
+
     await set_user(
         user_id,
         body.get("user_name", ""),
-        body.get("score", 0),
+        new_score,
         state.get("active_upgrades", {}),
         state.get("last_attack", {}),
         extra=new_extra,
     )
-    return {"ok": True}
+    return {"ok": True, "energy": energy, "max_energy": max_e, "fuel": new_extra.get("fuel", 0), "decayed": decayed != body.get("score", 0)}
 
 
 @app.post("/api/upgrade/buy")
@@ -264,7 +357,11 @@ async def handle_attack(request: Request):
         remaining = ATTACK_COOLDOWN - (now - last_attack_time)
         return {"ok": False, "error": f"Подожди {remaining // 60} мин перед атакой на этого игрока"}
 
-    pct = random.randint(1, 20)
+    attacker_extra = attacker.get("extra", dict(DEFAULT_EXTRA))
+    pct = random.randint(1, 20) + attacker_extra.get("attack_bonus_pct", 0)
+    active_planets = attacker_extra.get("active_planets", {})
+    planet_boost, _ = calc_planets_bonus(active_planets)
+    pct += planet_boost.get("attack_bonus", 0)
     stolen = max(1, target["score"] * pct // 100)
 
     target_extra = target.get("extra", dict(DEFAULT_EXTRA))
@@ -272,15 +369,10 @@ async def handle_attack(request: Request):
     safe_protected = stolen * target_safe_pct // 100
     actual_stolen = stolen - safe_protected
 
-    break_pct = random.randint(0, 90)
-    gained = actual_stolen * (100 - break_pct) // 100
-    broken = actual_stolen - gained
-
     target_score = max(0, target["score"] - actual_stolen)
     attacker_score = attacker["score"] - ATTACK_COST + gained
 
     last_attacks[target_id] = now
-    attacker_extra = attacker.get("extra", dict(DEFAULT_EXTRA))
     attacker_extra["total_attacks"] = attacker_extra.get("total_attacks", 0) + 1
     await set_user(attacker_id, attacker["user_name"], attacker_score, attacker["active_upgrades"],
                    last_attacks, extra=attacker_extra)
@@ -485,6 +577,78 @@ async def get_bot_username():
 @app.get("/api/achievements")
 async def handle_achievements():
     return {"achievements": ACHIEVEMENTS}
+
+
+@app.post("/api/planet/travel")
+async def handle_planet_travel(request: Request):
+    user_id = str(request.headers.get("x-telegram-user-id", "guest"))
+    body = await request.json()
+    planet_key = body.get("planet", "")
+    planet = PLANETS.get(planet_key)
+    if not planet:
+        return {"ok": False, "error": "Неизвестная планета"}
+
+    state = await get_user(user_id)
+    extra = state.get("extra", dict(DEFAULT_EXTRA))
+    now = int(time.time())
+
+    fuel = extra.get("fuel", 0)
+    if fuel < planet["fuel_cost"]:
+        return {"ok": False, "error": f"Нужно {planet['fuel_cost']} ⛽ топлива"}
+
+    active_planets = dict(extra.get("active_planets", {}))
+    existing = active_planets.get(planet_key, 0)
+    if existing > now:
+        return {"ok": False, "error": "Уже на этой планете"}
+
+    active_planets[planet_key] = now + planet["duration"]
+    extra["active_planets"] = active_planets
+    extra["fuel"] = fuel - planet["fuel_cost"]
+
+    planets_boost, cleaned = calc_planets_bonus(active_planets)
+    extra["active_planets"] = cleaned
+
+    await set_user(user_id, state["user_name"], state["score"], state["active_upgrades"],
+                   state["last_attack"], extra=extra)
+    return {"ok": True, "fuel": extra["fuel"], "active_planets": cleaned, "planets_boost": planets_boost,
+            "planet_name": planet["name"], "expires": now + planet["duration"]}
+
+
+@app.get("/api/legend/shop")
+async def handle_legend_shop():
+    return {"items": LEGENDARY_UPGRADES}
+
+
+@app.post("/api/legend/buy")
+async def handle_legend_buy(request: Request):
+    user_id = str(request.headers.get("x-telegram-user-id", "guest"))
+    body = await request.json()
+    item_id = body.get("item", "")
+    item = next((s for s in LEGENDARY_UPGRADES if s["id"] == item_id), None)
+    if not item:
+        return {"ok": False, "error": "Неизвестный апгрейд"}
+
+    state = await get_user(user_id)
+    extra = state.get("extra", dict(DEFAULT_EXTRA))
+
+    if extra.get("prestige_bonus", 0) < item["min_prestige"]:
+        return {"ok": False, "error": f"Нужно {item['min_prestige']} престижей"}
+
+    if item_id in extra.get("legendary_bought", []):
+        return {"ok": False, "error": "Уже куплено"}
+
+    if state["score"] < item["cost"]:
+        return {"ok": False, "error": "Недостаточно 🍪"}
+
+    new_score = state["score"] - item["cost"]
+    bought = extra.get("legendary_bought", [])
+    bought.append(item_id)
+    extra["legendary_bought"] = bought
+    item["effect"](extra)
+
+    await set_user(user_id, state["user_name"], new_score, state["active_upgrades"],
+                   state["last_attack"], extra=extra)
+    return {"ok": True, "score": new_score, "extra": extra}
 
 
 if __name__ == "__main__":
