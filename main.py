@@ -369,6 +369,10 @@ async def handle_attack(request: Request):
     safe_protected = stolen * target_safe_pct // 100
     actual_stolen = stolen - safe_protected
 
+    break_pct = random.randint(0, 30)
+    broken = actual_stolen * break_pct // 100
+    gained = actual_stolen - broken
+
     target_score = max(0, target["score"] - actual_stolen)
     attacker_score = attacker["score"] - ATTACK_COST + gained
 

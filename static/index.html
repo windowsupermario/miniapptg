@@ -332,8 +332,7 @@
             }
             clickBonus += (extra.prestige_bonus || 0);
             if (planetsBoost.click_bonus) clickBonus += planetsBoost.click_bonus;
-            if (planetsBoost.auto_speed) { autoClicker = 2; }
-            if (planetsBoost.auto_clicker) { autoClicker = autoClicker > 0 ? 2 : 0; }
+            if (planetsBoost.auto_speed || planetsBoost.auto_clicker) autoClicker = 1;
             if (planetsBoost.shield) shieldUntil = Math.max(shieldUntil, now + planetsBoost.shield);
             attackBonus = planetsBoost.attack_bonus || 0;
             if (!autoClicker && autoTimer) { clearInterval(autoTimer); autoTimer = null; }
@@ -852,6 +851,7 @@
         function startAutoClicker() {
             if (autoTimer) clearInterval(autoTimer);
             const cookie = document.getElementById('cookie');
+            const speed = planetsBoost.auto_speed || (planetsBoost.auto_clicker ? 1000 : null) || extra.auto_speed || 2000;
             autoTimer = setInterval(() => {
                 if (!autoClicker) { clearInterval(autoTimer); autoTimer = null; return; }
                 if (energy <= 0) return;
@@ -864,7 +864,7 @@
                     cookie.style.transform = '';
                     cookie.style.boxShadow = '';
                 }, 150);
-            }, 2000);
+            }, speed);
         }
 
         function scheduleSave() {
@@ -1119,7 +1119,7 @@
             return html;
         }
 
-        function renderAchievementsList() {
+        async function renderAchievementsList() {
             const res = await fetch('/api/achievements');
             const data = await res.json();
             const list = data.achievements || [];
