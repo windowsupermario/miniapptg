@@ -177,7 +177,30 @@
         const userId = tg?.initDataUnsafe?.user?.id?.toString() || 'guest';
         const userName = tg?.initDataUnsafe?.user?.first_name || 'Гость';
         let score = 0, clickBonus = 0, autoClicker = 0, shieldUntil = 0;
-        let saveTimer = null, autoTimer = null, shieldTimer = null, eventTimer = null;
+        let activeUpgrades = {};
+        let saveTimer = null, autoTimer = null, shieldTimer = null, eventTimer = null, recalcTimer = null;
+
+        const UPGRADE_DEFS = {
+            click_bonus_1: { field: 'click_bonus', value: 1, duration: 300 },
+            click_bonus_3: { field: 'click_bonus', value: 3, duration: 300 },
+            click_bonus_7: { field: 'click_bonus', value: 7, duration: 300 },
+            auto_clicker: { field: 'auto_clicker', value: 1, duration: 300 },
+            shield: { field: 'shield', value: 300, duration: 300 },
+        };
+
+        function recalcDerived() {
+            const now = Math.floor(Date.now() / 1000);
+            clickBonus = 0; autoClicker = 0; shieldUntil = 0;
+            for (const [key, expiry] of Object.entries(activeUpgrades)) {
+                if (expiry <= now) { delete activeUpgrades[key]; continue; }
+                const d = UPGRADE_DEFS[key];
+                if (!d) continue;
+                if (d.field === 'click_bonus') clickBonus += d.value;
+                else if (d.field === 'auto_clicker') autoClicker = 1;
+                else if (d.field === 'shield') shieldUntil = Math.max(shieldUntil, expiry);
+            }
+            if (!autoClicker && autoTimer) { clearInterval(autoTimer); autoTimer = null; }
+        }
 
         const EVENTS = [
             { icon: '🦝', text: 'Вор украл печенье!', sub: (n) => `-${n} 🍪` },
@@ -276,6 +299,12 @@
             renderShop();
         }
 
+        function timeStr(expiry) {
+            const rem = Math.max(0, expiry - Math.floor(Date.now() / 1000));
+            const m = Math.floor(rem / 60), s = rem % 60;
+            return m + ':' + String(s).padStart(2, '0');
+        }
+
         function renderShop() {
             const allUpgrades = [
                 { key: 'click_bonus_1', icon: '🖊️', name: 'Лучшая ручка', desc: '+1 к клику', cost: 50 },
@@ -287,20 +316,19 @@
             const now = Math.floor(Date.now() / 1000);
             const el = document.getElementById('shop-list');
             el.innerHTML = allUpgrades.map(u => {
-                let isBought = false;
-                if (u.key === 'auto_clicker') isBought = autoClicker;
-                else if (u.key === 'shield') isBought = shieldUntil > now;
-                else isBought = clickBonus >= parseInt(u.key.split('_').pop());
-                const canBuy = score >= u.cost && !isBought;
+                const expiry = activeUpgrades[u.key];
+                const isActive = expiry && expiry > now;
+                const canBuy = score >= u.cost && !isActive;
+                const timeLeft = isActive ? timeStr(expiry) : '';
                 return `
                     <div class="shop-item">
                         <div class="shop-icon">${u.icon}</div>
                         <div class="shop-info">
                             <div class="shop-name">${u.name}</div>
-                            <div class="shop-desc">${u.desc} · ${u.cost} 🍪</div>
+                            <div class="shop-desc">${u.desc} · ${u.cost} 🍪${timeLeft ? ' · ⏱ ' + timeLeft : ''}</div>
                         </div>
-                        <button class="shop-btn ${isBought ? 'bought' : ''}" data-key="${u.key}" ${!canBuy && !isBought ? 'disabled' : ''}>
-                            ${isBought ? '✓' : 'Купить'}
+                        <button class="shop-btn ${isActive ? 'bought' : ''}" data-key="${u.key}" ${!canBuy && !isActive ? 'disabled' : ''}>
+                            ${isActive ? '✓' : 'Купить'}
                         </button>
                     </div>
                 `;
@@ -316,9 +344,8 @@
                     const data = await res.json();
                     if (data.ok) {
                         score = data.score;
-                        clickBonus = data.click_bonus;
-                        autoClicker = data.auto_clicker;
-                        if (data.shield_until !== undefined) shieldUntil = data.shield_until;
+                        activeUpgrades = data.active_upgrades || {};
+                        recalcDerived();
                         if (autoClicker) startAutoClicker();
                         renderUI(); scheduleSave();
                     } else {
@@ -331,6 +358,7 @@
         function startAutoClicker() {
             if (autoTimer) clearInterval(autoTimer);
             autoTimer = setInterval(() => {
+                if (!autoClicker) { clearInterval(autoTimer); autoTimer = null; return; }
                 score++;
                 renderUI(); scheduleSave();
             }, 2000);
@@ -346,7 +374,7 @@
                 await fetch('/api/user', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', 'x-telegram-user-id': userId },
-                    body: JSON.stringify({ user_name: userName, score, click_bonus: clickBonus, auto_clicker: autoClicker }),
+                    body: JSON.stringify({ user_name: userName, score }),
                 });
                 document.getElementById('status').textContent = '✓ Сохранено';
             } catch { document.getElementById('status').textContent = '✗ Ошибка'; }
@@ -369,13 +397,13 @@
                 const res = await fetch('/api/user', { headers: { 'x-telegram-user-id': userId } });
                 const d = await res.json();
                 score = d.score || 0;
-                clickBonus = d.click_bonus || 0;
-                autoClicker = d.auto_clicker || 0;
-                shieldUntil = d.shield_until || 0;
+                activeUpgrades = d.active_upgrades || {};
+                recalcDerived();
                 if (autoClicker) startAutoClicker();
                 renderUI();
                 scheduleRandomEvent();
                 setInterval(updateShieldDisplay, 1000);
+                recalcTimer = setInterval(() => { recalcDerived(); renderUI(); }, 1000);
                 const notifs = d.notifications || [];
                 if (notifs.length > 0) {
                     const n = notifs[0];
@@ -428,7 +456,7 @@
                             score = d.new_score;
                             renderUI(); scheduleSave();
                             loadLeaderboard();
-                            showLbMsg(`💢 Атака на ${btn.dataset.name} успешна! Украдено ${d.stolen} 🍪 (${d.pct}%). Твой счёт: ${d.new_score}`, false);
+                            showLbMsg(`💢 Атака на ${btn.dataset.name} успешна! Украдено ${d.stolen} 🍪 (${d.pct}%), но ${d.broken} 🍪 (${d.break_pct}%) разбилось. Получено: ${d.gained} 🍪. Твой счёт: ${d.new_score}`, false);
                         } else {
                             showLbMsg(d.error, true);
                             btn.disabled = false; btn.textContent = '💢 Атака (500🍪)';

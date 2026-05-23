@@ -19,9 +19,7 @@ if DATABASE_URL:
                         user_id TEXT PRIMARY KEY,
                         user_name TEXT NOT NULL DEFAULT '',
                         score INTEGER NOT NULL DEFAULT 0,
-                        click_bonus INTEGER NOT NULL DEFAULT 0,
-                        auto_clicker INTEGER NOT NULL DEFAULT 0,
-                        shield_until INTEGER NOT NULL DEFAULT 0,
+                        active_upgrades TEXT NOT NULL DEFAULT '{}',
                         last_attack TEXT NOT NULL DEFAULT '{}',
                         notifications TEXT NOT NULL DEFAULT '[]'
                     )
@@ -32,35 +30,34 @@ if DATABASE_URL:
         pool = await get_pool()
         async with pool.acquire() as conn:
             row = await conn.fetchrow(
-                "SELECT user_name, score, click_bonus, auto_clicker, shield_until, last_attack, notifications FROM users WHERE user_id = $1",
+                "SELECT user_name, score, active_upgrades, last_attack, notifications FROM users WHERE user_id = $1",
                 user_id
             )
             if row:
                 return {
                     "user_name": row["user_name"],
                     "score": row["score"],
-                    "click_bonus": row["click_bonus"],
-                    "auto_clicker": row["auto_clicker"],
-                    "shield_until": row["shield_until"],
+                    "active_upgrades": json.loads(row["active_upgrades"]),
                     "last_attack": json.loads(row["last_attack"]),
                     "notifications": json.loads(row["notifications"]),
                 }
-            return {"user_name": "", "score": 0, "click_bonus": 0, "auto_clicker": 0, "shield_until": 0, "last_attack": {}, "notifications": []}
+            return {"user_name": "", "score": 0, "active_upgrades": {}, "last_attack": {}, "notifications": []}
 
-    async def set_user(user_id: str, user_name: str, score: int, click_bonus: int, auto_clicker: int, shield_until: int = 0, last_attack: dict = None, notifications: list = None):
+    async def set_user(user_id: str, user_name: str, score: int, active_upgrades: dict = None, last_attack: dict = None, notifications: list = None):
         pool = await get_pool()
+        if active_upgrades is None:
+            active_upgrades = {}
         if last_attack is None:
             last_attack = {}
         if notifications is None:
             notifications = []
         async with pool.acquire() as conn:
             await conn.execute("""
-                INSERT INTO users (user_id, user_name, score, click_bonus, auto_clicker, shield_until, last_attack, notifications)
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                INSERT INTO users (user_id, user_name, score, active_upgrades, last_attack, notifications)
+                VALUES ($1, $2, $3, $4, $5, $6)
                 ON CONFLICT (user_id) DO UPDATE SET
-                    user_name = $2, score = $3, click_bonus = $4, auto_clicker = $5,
-                    shield_until = $6, last_attack = $7, notifications = $8
-            """, user_id, user_name, score, click_bonus, auto_clicker, shield_until, json.dumps(last_attack), json.dumps(notifications))
+                    user_name = $2, score = $3, active_upgrades = $4, last_attack = $5, notifications = $6
+            """, user_id, user_name, score, json.dumps(active_upgrades), json.dumps(last_attack), json.dumps(notifications))
 
     async def get_leaderboard(limit: int = 10) -> list:
         pool = await get_pool()
@@ -90,15 +87,15 @@ else:
         return {
             "user_name": u.get("user_name", ""),
             "score": u.get("score", 0),
-            "click_bonus": u.get("click_bonus", 0),
-            "auto_clicker": u.get("auto_clicker", 0),
-            "shield_until": u.get("shield_until", 0),
+            "active_upgrades": u.get("active_upgrades", {}),
             "last_attack": u.get("last_attack", {}),
             "notifications": u.get("notifications", []),
         }
 
-    async def set_user(user_id: str, user_name: str, score: int, click_bonus: int, auto_clicker: int, shield_until: int = 0, last_attack: dict = None, notifications: list = None):
+    async def set_user(user_id: str, user_name: str, score: int, active_upgrades: dict = None, last_attack: dict = None, notifications: list = None):
         data = _load()
+        if active_upgrades is None:
+            active_upgrades = {}
         if last_attack is None:
             last_attack = {}
         if notifications is None:
@@ -106,9 +103,7 @@ else:
         data[user_id] = {
             "user_name": user_name,
             "score": score,
-            "click_bonus": click_bonus,
-            "auto_clicker": auto_clicker,
-            "shield_until": shield_until,
+            "active_upgrades": active_upgrades,
             "last_attack": last_attack,
             "notifications": notifications,
         }
