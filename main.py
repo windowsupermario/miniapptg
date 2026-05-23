@@ -410,7 +410,7 @@ async def handle_skins_list():
 
 @app.get("/api/leaderboard")
 async def handle_leaderboard(sort: str = "score"):
-    board = await get_leaderboard(10, sort)
+    board = await get_leaderboard(50, sort)
     return {"leaderboard": board}
 
 

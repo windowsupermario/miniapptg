@@ -190,7 +190,6 @@
         <button class="tab active" data-tab="game">🍪 Игра</button>
         <button class="tab" data-tab="shop">🏪 Магазин</button>
         <button class="tab" data-tab="leaderboard">🏆 Топ</button>
-        <button class="tab" data-tab="achievements">🎯 Достиж</button>
         <button class="tab" data-tab="stats">📊 Стата</button>
     </div>
 
@@ -230,11 +229,6 @@
             <button class="tab" data-sort="attacks">💢 Атаки</button>
         </div>
         <div id="lb-list"></div>
-    </div>
-
-    <div class="page" id="page-achievements">
-        <p style="font-size:13px;color:var(--tg-theme-hint-color,#888);margin-bottom:12px">Достижения обновляются автоматически</p>
-        <div id="ach-list"></div>
     </div>
 
     <div class="page" id="page-stats">
@@ -469,7 +463,6 @@
                 document.getElementById('page-' + btn.dataset.tab).classList.add('active');
                 if (btn.dataset.tab === 'leaderboard') loadLeaderboard();
                 if (btn.dataset.tab === 'shop') renderShop();
-                if (btn.dataset.tab === 'achievements') renderAchievements();
                 if (btn.dataset.tab === 'stats') renderStats();
             });
         });
@@ -788,6 +781,9 @@
 
         async function loadLeaderboard() {
             try {
+                document.getElementById('lb-sort-tabs').querySelectorAll('.tab').forEach(t => {
+                    t.classList.toggle('active', t.dataset.sort === lbSort);
+                });
                 const res = await fetch('/api/leaderboard?sort=' + lbSort);
                 const d = await res.json();
                 const list = document.getElementById('lb-list');
@@ -867,7 +863,8 @@
             const e = extra;
             const totalAch = 8;
             const earnedAch = (e.achievements || []).length;
-            document.getElementById('stats-content').innerHTML = `
+            let html = `
+                <div style="font-weight:700;font-size:14px;margin-bottom:8px">📊 Статистика</div>
                 <div class="shop-item"><span class="shop-icon">🍪</span><div class="shop-info"><div class="shop-name">${score}</div><div class="shop-desc">Текущий счёт</div></div></div>
                 <div class="shop-item"><span class="shop-icon">📈</span><div class="shop-info"><div class="shop-name">${e.highest_score || 0}</div><div class="shop-desc">Рекорд</div></div></div>
                 <div class="shop-item"><span class="shop-icon">🔥</span><div class="shop-info"><div class="shop-name">${e.prestige_bonus || 0}</div><div class="shop-desc">Престиж</div></div></div>
@@ -876,10 +873,27 @@
                 <div class="shop-item"><span class="shop-icon">🏆</span><div class="shop-info"><div class="shop-name">${earnedAch} / ${totalAch}</div><div class="shop-desc">Достижений</div></div></div>
                 <div class="shop-item"><span class="shop-icon">🎨</span><div class="shop-info"><div class="shop-name">${ownedSkins.length}</div><div class="shop-desc">Скинов в коллекции</div></div></div>
                 <div class="shop-item"><span class="shop-icon">🔗</span><div class="shop-info"><div class="shop-name" id="ref-link" style="font-size:12px;word-break:break-all">Загрузка...</div><div class="shop-desc">Реферальная ссылка (приведи друга → +100 🍪)</div></div><button class="shop-btn" id="ref-copy-btn" onclick="copyRefLink()">Копировать</button></div>
+                <div style="font-weight:700;font-size:14px;margin:16px 0 8px">🎯 Достижения</div>
+                <div id="ach-list"></div>
             `;
+            document.getElementById('stats-content').innerHTML = html;
+            renderAchievementsList();
             fetch('/api/referral', { headers: { 'x-telegram-user-id': userId } }).then(r => r.json()).then(d => {
                 document.getElementById('ref-link').textContent = d.referral_link || '';
             });
+        }
+
+        async function renderAchievementsList() {
+            const res = await fetch('/api/achievements');
+            const data = await res.json();
+            const list = data.achievements || [];
+            const earned = new Set(extra.achievements || []);
+            const el = document.getElementById('ach-list');
+            if (!el) return;
+            el.innerHTML = list.map(a => {
+                const done = earned.has(a.id);
+                return '<div class="ach-entry"><div class="ach-icon">' + a.icon + '</div><div class="ach-info"><div class="ach-name">' + a.name + '</div><div class="ach-desc">' + a.desc + '</div></div><div class="ach-status ' + (done ? 'ach-done' : 'ach-locked') + '">' + (done ? '✓' : '★') + '</div></div>';
+            }).join('');
         }
 
         function copyRefLink() {
@@ -888,31 +902,6 @@
                 navigator.clipboard.writeText(link);
                 document.getElementById('status').textContent = '✓ Ссылка скопирована';
             }
-        }
-
-        async function renderAchievements() {
-            const res = await fetch('/api/achievements');
-            const data = await res.json();
-            const list = data.achievements || [];
-            const earned = new Set(extra.achievements || []);
-            const el = document.getElementById('ach-list');
-            if (list.length === 0) {
-                el.innerHTML = '<div class="lb-empty">Нет достижений</div>';
-                return;
-            }
-            el.innerHTML = list.map(a => {
-                const done = earned.has(a.id);
-                return `
-                    <div class="ach-entry">
-                        <div class="ach-icon">${a.icon}</div>
-                        <div class="ach-info">
-                            <div class="ach-name">${a.name}</div>
-                            <div class="ach-desc">${a.desc}</div>
-                        </div>
-                        <div class="ach-status ${done ? 'ach-done' : 'ach-locked'}">${done ? '✓' : '★'}</div>
-                    </div>
-                `;
-            }).join('');
         }
 
         document.getElementById('cookie').addEventListener('click', (e) => {
