@@ -241,11 +241,20 @@
         const userId = tg?.initDataUnsafe?.user?.id?.toString() || 'guest';
         const userName = tg?.initDataUnsafe?.user?.first_name || 'Гость';
         let score = 0, clickBonus = 0, autoClicker = 0, shieldUntil = 0, safePct = 0;
-        let activeUpgrades = {}, extra = {};
+        let activeUpgrades = {}, extra = {}, currentSkin = 'default', ownedSkins = ['default'];
         let saveTimer = null, autoTimer = null, shieldTimer = null, eventTimer = null;
         let recalcTimer = null, goldenTimer = null, comboResets = null;
         let combo = 0, lastClickTime = 0, clicksSinceSave = 0;
         let goldenEnabled = false;
+
+        const SKINS = {
+            default: { name: 'Классическая', cost: 0, gradient: 'radial-gradient(circle at 35% 35%, #f5d68a, #c8943c)', chips: '#6b4226' },
+            choco:   { name: 'Шоколадная',   cost: 200, gradient: 'radial-gradient(circle at 35% 35%, #8d6e4a, #4a2c1a)', chips: '#2d1a0a' },
+            matcha:  { name: 'Матча',        cost: 300, gradient: 'radial-gradient(circle at 35% 35%, #b8d9a0, #6b9b4e)', chips: '#3d5a2e' },
+            golden:  { name: 'Золотая',      cost: 500, gradient: 'radial-gradient(circle at 35% 35%, #ffd700, #b8860b)', chips: '#6b4c00' },
+            rainbow: { name: 'Радужная',     cost: 1000, gradient: 'radial-gradient(circle at 35% 35%, #ff9a9e, #a8e6cf)', chips: '#6b3b5a' },
+            space:   { name: 'Космическая',  cost: 2000, gradient: 'radial-gradient(circle at 35% 35%, #5b2d8e, #1a0a3e)', chips: '#9c6bdb' },
+        };
 
         const UPGRADE_DEFS = {
             click_bonus_1: { field: 'click_bonus', value: 1, duration: 300, requires: null },
@@ -447,6 +456,7 @@
                 pb.style.display = 'none';
             }
 
+            applySkin();
             const pBtn = document.getElementById('prestige-btn');
             if (score >= 10000) {
                 pBtn.style.display = 'inline-block';
@@ -495,6 +505,13 @@
                 document.getElementById('status').textContent = d.error;
             }
         });
+
+        function applySkin() {
+            const skin = SKINS[currentSkin] || SKINS.default;
+            const cookie = document.getElementById('cookie');
+            cookie.style.background = skin.gradient;
+            document.querySelectorAll('.chip').forEach(c => c.style.background = skin.chips);
+        }
 
         function timeStr(expiry) {
             const rem = Math.max(0, expiry - Math.floor(Date.now() / 1000));
@@ -555,6 +572,57 @@
                     }
                 });
             });
+
+            renderSkins();
+        }
+
+        function renderSkins() {
+            const el = document.getElementById('shop-list');
+            const skinKeys = Object.keys(SKINS);
+            let html = '<div style="margin-top:16px;font-weight:700;font-size:14px">🎨 Скины</div>';
+            skinKeys.forEach(key => {
+                const s = SKINS[key];
+                const owned = ownedSkins.includes(key);
+                const active = currentSkin === key;
+                const canBuy = score >= s.cost && !owned;
+                html += `
+                    <div class="shop-item" style="${active ? 'border:2px solid #4caf50' : ''}">
+                        <div style="width:28px;height:28px;border-radius:50%;background:${s.gradient};flex-shrink:0"></div>
+                        <div class="shop-info">
+                            <div class="shop-name">${s.name} ${active ? '✓' : ''}</div>
+                            <div class="shop-desc">${s.cost ? s.cost + ' 🍪' : 'Бесплатно'}${owned ? ' · в коллекции' : ''}</div>
+                        </div>
+                        ${!owned ? `<button class="shop-btn" data-skin="${key}" ${!canBuy ? 'disabled' : ''}>Купить</button>`
+                                 : `<button class="shop-btn bought" data-select="${key}" ${active ? 'disabled' : ''}>Надеть</button>`}
+                    </div>
+                `;
+            });
+            el.innerHTML += html;
+
+            el.querySelectorAll('[data-skin]').forEach(btn => {
+                btn.addEventListener('click', async () => {
+                    const res = await fetch('/api/skin/buy', {
+                        method: 'POST', headers: { 'Content-Type': 'application/json', 'x-telegram-user-id': userId },
+                        body: JSON.stringify({ skin: btn.dataset.skin }),
+                    });
+                    const d = await res.json();
+                    if (d.ok) {
+                        score = d.score;
+                        currentSkin = d.current_skin;
+                        ownedSkins = d.owned_skins;
+                        renderUI(); scheduleSave();
+                    } else {
+                        document.getElementById('status').textContent = d.error;
+                    }
+                });
+            });
+
+            el.querySelectorAll('[data-select]').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    currentSkin = btn.dataset.select;
+                    renderUI(); scheduleSave();
+                });
+            });
         }
 
         function startAutoClicker() {
@@ -594,6 +662,8 @@
                 score = d.score || 0;
                 activeUpgrades = d.active_upgrades || {};
                 extra = d.extra || {};
+                currentSkin = extra.current_skin || 'default';
+                ownedSkins = extra.owned_skins || ['default'];
                 recalcDerived();
                 if (autoClicker) startAutoClicker();
                 renderUI();
@@ -749,13 +819,14 @@
             if (comboResets) clearTimeout(comboResets);
             comboResets = setTimeout(() => { combo = 0; renderCombo(); }, 3000);
 
-            const gain = perClick() * (1 + combo * 0.1);
+            const comboMultiplier = 1 + Math.min(combo, 5) * 0.1;
+            const gain = Math.round(perClick() * comboMultiplier);
             score += gain;
             clicksSinceSave++;
             renderUI(); scheduleSave();
-            showFloatingText(e.clientX - 16, e.clientY - 16, '+' + Math.round(gain), 'gain');
+            showFloatingText(e.clientX - 16, e.clientY - 16, '+' + gain, 'gain');
             if (combo > 1) {
-                showFloatingText(e.clientX + 20, e.clientY - 16, 'x' + combo, 'combo-text');
+                showFloatingText(e.clientX + 20, e.clientY - 16, 'x' + combo + ' (' + Math.round(comboMultiplier * 100) + '%)', 'combo-text');
             }
         });
 

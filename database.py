@@ -10,6 +10,8 @@ DEFAULT_EXTRA = {
     "total_attacks": 0,
     "highest_score": 0,
     "achievements": [],
+    "current_skin": "default",
+    "owned_skins": ["default"],
 }
 
 if DATABASE_URL:

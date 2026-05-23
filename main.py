@@ -38,6 +38,15 @@ GOLDEN_REWARDS = [
     {"type": "boost",   "value": 1,   "icon": "⚡", "text": "x2 клика на 30 сек", "boost_key": "golden_boost", "boost_duration": 30},
 ]
 
+SKINS = {
+    "default": {"name": "Классическая",  "cost": 0,    "gradient": "radial-gradient(circle at 35% 35%, #f5d68a, #c8943c)", "chips": "#6b4226"},
+    "choco":   {"name": "Шоколадная",    "cost": 200,  "gradient": "radial-gradient(circle at 35% 35%, #8d6e4a, #4a2c1a)", "chips": "#2d1a0a"},
+    "matcha":  {"name": "Матча",         "cost": 300,  "gradient": "radial-gradient(circle at 35% 35%, #b8d9a0, #6b9b4e)", "chips": "#3d5a2e"},
+    "golden":  {"name": "Золотая",       "cost": 500,  "gradient": "radial-gradient(circle at 35% 35%, #ffd700, #b8860b)", "chips": "#6b4c00"},
+    "rainbow": {"name": "Радужная",      "cost": 1000, "gradient": "radial-gradient(circle at 35% 35%, #ff9a9e, #a8e6cf)", "chips": "#6b3b5a"},
+    "space":   {"name": "Космическая",   "cost": 2000, "gradient": "radial-gradient(circle at 35% 35%, #5b2d8e, #1a0a3e)", "chips": "#9c6bdb"},
+}
+
 ACHIEVEMENTS = [
     {"id": "score_100",    "name": "Новичок",       "desc": "Накопить 100 🍪",        "icon": "🌱",  "check": lambda e: e["highest_score"] >= 100},
     {"id": "score_1000",   "name": "Кликер-любитель","desc": "Накопить 1000 🍪",       "icon": "🍪",  "check": lambda e: e["highest_score"] >= 1000},
@@ -348,6 +357,40 @@ async def handle_golden(request: Request):
     click_bonus = calc_click_bonus(cb, extra)
     return {"ok": True, "score": new_score, "click_bonus": click_bonus, "auto_clicker": ac,
             "shield_until": su, "safe_pct": sp, "active_upgrades": active_upgrades}
+
+
+@app.post("/api/skin/buy")
+async def handle_buy_skin(request: Request):
+    user_id = str(request.headers.get("x-telegram-user-id", "guest"))
+    body = await request.json()
+    skin_key = body.get("skin", "")
+    skin = SKINS.get(skin_key)
+    if not skin:
+        return {"ok": False, "error": "Неизвестный скин"}
+    if skin["cost"] == 0:
+        return {"ok": False, "error": "Уже доступен"}
+
+    state = await get_user(user_id)
+    extra = state.get("extra", dict(DEFAULT_EXTRA))
+    owned = extra.get("owned_skins", ["default"])
+    if skin_key in owned:
+        return {"ok": False, "error": "Уже куплено"}
+
+    if state["score"] < skin["cost"]:
+        return {"ok": False, "error": "Недостаточно очков"}
+
+    new_score = state["score"] - skin["cost"]
+    owned.append(skin_key)
+    extra["owned_skins"] = owned
+    extra["current_skin"] = skin_key
+    await set_user(user_id, state["user_name"], new_score, state["active_upgrades"],
+                   state["last_attack"], extra=extra)
+    return {"ok": True, "score": new_score, "current_skin": skin_key, "owned_skins": owned}
+
+
+@app.get("/api/skins")
+async def handle_skins_list():
+    return {"skins": {k: {"name": v["name"], "cost": v["cost"]} for k, v in SKINS.items()}}
 
 
 @app.get("/api/leaderboard")
