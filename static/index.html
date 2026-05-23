@@ -554,6 +554,9 @@
                 `;
             }).join('');
 
+            const skinsHtml = renderSkinsHtml();
+            el.innerHTML += skinsHtml;
+
             el.querySelectorAll('.shop-btn:not(.bought):not([disabled])').forEach(btn => {
                 btn.addEventListener('click', async () => {
                     const res = await fetch('/api/upgrade/buy', {
@@ -572,32 +575,6 @@
                     }
                 });
             });
-
-            renderSkins();
-        }
-
-        function renderSkins() {
-            const el = document.getElementById('shop-list');
-            const skinKeys = Object.keys(SKINS);
-            let html = '<div style="margin-top:16px;font-weight:700;font-size:14px">🎨 Скины</div>';
-            skinKeys.forEach(key => {
-                const s = SKINS[key];
-                const owned = ownedSkins.includes(key);
-                const active = currentSkin === key;
-                const canBuy = score >= s.cost && !owned;
-                html += `
-                    <div class="shop-item" style="${active ? 'border:2px solid #4caf50' : ''}">
-                        <div style="width:28px;height:28px;border-radius:50%;background:${s.gradient};flex-shrink:0"></div>
-                        <div class="shop-info">
-                            <div class="shop-name">${s.name} ${active ? '✓' : ''}</div>
-                            <div class="shop-desc">${s.cost ? s.cost + ' 🍪' : 'Бесплатно'}${owned ? ' · в коллекции' : ''}</div>
-                        </div>
-                        ${!owned ? `<button class="shop-btn" data-skin="${key}" ${!canBuy ? 'disabled' : ''}>Купить</button>`
-                                 : `<button class="shop-btn bought" data-select="${key}" ${active ? 'disabled' : ''}>Надеть</button>`}
-                    </div>
-                `;
-            });
-            el.innerHTML += html;
 
             el.querySelectorAll('[data-skin]').forEach(btn => {
                 btn.addEventListener('click', async () => {
@@ -623,6 +600,29 @@
                     renderUI(); scheduleSave();
                 });
             });
+        }
+
+        function renderSkinsHtml() {
+            const skinKeys = Object.keys(SKINS);
+            let html = '<div style="margin-top:16px;font-weight:700;font-size:14px">🎨 Скины</div>';
+            skinKeys.forEach(key => {
+                const s = SKINS[key];
+                const owned = ownedSkins.includes(key);
+                const active = currentSkin === key;
+                const canBuy = score >= s.cost && !owned;
+                html += `
+                    <div class="shop-item" style="${active ? 'border:2px solid #4caf50' : ''}">
+                        <div style="width:28px;height:28px;border-radius:50%;background:${s.gradient};flex-shrink:0"></div>
+                        <div class="shop-info">
+                            <div class="shop-name">${s.name} ${active ? '✓' : ''}</div>
+                            <div class="shop-desc">${s.cost ? s.cost + ' 🍪' : 'Бесплатно'}${owned ? ' · в коллекции' : ''}</div>
+                        </div>
+                        ${!owned ? `<button class="shop-btn" data-skin="${key}" ${!canBuy ? 'disabled' : ''}>Купить</button>`
+                                 : `<button class="shop-btn bought" data-select="${key}" ${active ? 'disabled' : ''}>Надеть</button>`}
+                    </div>
+                `;
+            });
+            return html;
         }
 
         function startAutoClicker() {
@@ -819,14 +819,16 @@
             if (comboResets) clearTimeout(comboResets);
             comboResets = setTimeout(() => { combo = 0; renderCombo(); }, 3000);
 
+            const baseGain = perClick();
             const comboMultiplier = 1 + Math.min(combo, 5) * 0.1;
-            const gain = Math.round(perClick() * comboMultiplier);
+            const gain = Math.round(baseGain * comboMultiplier);
+            const comboExtra = gain - baseGain;
             score += gain;
             clicksSinceSave++;
             renderUI(); scheduleSave();
             showFloatingText(e.clientX - 16, e.clientY - 16, '+' + gain, 'gain');
-            if (combo > 1) {
-                showFloatingText(e.clientX + 20, e.clientY - 16, 'x' + combo + ' (' + Math.round(comboMultiplier * 100) + '%)', 'combo-text');
+            if (comboExtra > 0) {
+                showFloatingText(e.clientX + 20, e.clientY - 16, '+' + comboExtra + ' комбо', 'combo-text');
             }
         });
 
