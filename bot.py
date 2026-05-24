@@ -8,6 +8,7 @@ logging.basicConfig(format="%(asctime)s - %(name)s - %(levelname)s - %(message)s
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 APP_URL = os.getenv("APP_URL")
+DATABASE_URL = os.getenv("DATABASE_URL", "")
 ADMIN_ID = 7153815329
 
 _app = None
@@ -41,8 +42,19 @@ async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     text = " ".join(context.args)
-    from database import get_all_user_ids
-    user_ids = await get_all_user_ids()
+
+    if DATABASE_URL:
+        import asyncpg
+        conn = await asyncpg.connect(DATABASE_URL)
+        try:
+            rows = await conn.fetch("SELECT user_id FROM users")
+            user_ids = [r["user_id"] for r in rows]
+        finally:
+            await conn.close()
+    else:
+        from database import get_all_user_ids
+        user_ids = await get_all_user_ids()
+
     sent = 0
     failed = 0
     for uid in user_ids:
