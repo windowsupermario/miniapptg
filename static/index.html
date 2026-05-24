@@ -1179,10 +1179,20 @@
 
         function copyRefLink() {
             const link = document.getElementById('ref-link').textContent;
-            if (navigator.clipboard) {
-                navigator.clipboard.writeText(link);
-                document.getElementById('status').textContent = '✓ Ссылка скопирована';
+            if (tg && tg.Clipboard && tg.Clipboard.setText) {
+                tg.Clipboard.setText(link);
+                tg.HapticFeedback?.impactOccurred?.('light');
+            } else if (navigator.clipboard) {
+                navigator.clipboard.writeText(link).catch(() => {});
+            } else {
+                const ta = document.createElement('textarea');
+                ta.value = link;
+                document.body.appendChild(ta);
+                ta.select();
+                document.execCommand('copy');
+                document.body.removeChild(ta);
             }
+            document.getElementById('status').textContent = '✓ Ссылка скопирована';
         }
 
         function regenEnergy() {
