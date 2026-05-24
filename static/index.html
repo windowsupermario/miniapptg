@@ -254,7 +254,7 @@
                 </div>
                 <div class="x2-badge" id="x2-badge">x2</div>
             </div>
-            <button class="prestige-btn" id="prestige-btn" style="display:none">🔥 Престиж (нужно 10000 🍪)</button>
+            <button class="prestige-btn" id="prestige-btn" style="display:none">🔥 Престиж (нужно 50000 🍪)</button>
             <div class="status" id="status"></div>
         </div>
     </div>
@@ -298,11 +298,11 @@
 
         const SKINS = {
             default: { name: 'Классическая', cost: 0, gradient: 'radial-gradient(circle at 35% 35%, #f5d68a, #c8943c)', chips: '#6b4226' },
-            choco:   { name: 'Шоколадная',   cost: 500, gradient: 'radial-gradient(circle at 35% 35%, #8d6e4a, #4a2c1a)', chips: '#2d1a0a' },
-            matcha:  { name: 'Матча',        cost: 800, gradient: 'radial-gradient(circle at 35% 35%, #b8d9a0, #6b9b4e)', chips: '#3d5a2e' },
-            golden:  { name: 'Золотая',      cost: 1500, gradient: 'radial-gradient(circle at 35% 35%, #ffd700, #b8860b)', chips: '#6b4c00' },
-            rainbow: { name: 'Радужная',     cost: 3000, gradient: 'radial-gradient(circle at 35% 35%, #ff9a9e, #a8e6cf)', chips: '#6b3b5a' },
-            space:   { name: 'Космическая',  cost: 5000, gradient: 'radial-gradient(circle at 35% 35%, #5b2d8e, #1a0a3e)', chips: '#9c6bdb' },
+            choco:   { name: 'Шоколадная',   cost: 2500, gradient: 'radial-gradient(circle at 35% 35%, #8d6e4a, #4a2c1a)', chips: '#2d1a0a' },
+            matcha:  { name: 'Матча',        cost: 4000, gradient: 'radial-gradient(circle at 35% 35%, #b8d9a0, #6b9b4e)', chips: '#3d5a2e' },
+            golden:  { name: 'Золотая',      cost: 7500, gradient: 'radial-gradient(circle at 35% 35%, #ffd700, #b8860b)', chips: '#6b4c00' },
+            rainbow: { name: 'Радужная',     cost: 15000, gradient: 'radial-gradient(circle at 35% 35%, #ff9a9e, #a8e6cf)', chips: '#6b3b5a' },
+            space:   { name: 'Космическая',  cost: 25000, gradient: 'radial-gradient(circle at 35% 35%, #5b2d8e, #1a0a3e)', chips: '#9c6bdb' },
         };
 
         const UPGRADE_DEFS = {
@@ -613,14 +613,14 @@
                 badge.style.display = 'none';
             }
             const pBtn = document.getElementById('prestige-btn');
-            if (score >= 10000) {
+            if (score >= 50000) {
                 pBtn.style.display = 'inline-block';
                 pBtn.disabled = false;
                 pBtn.textContent = '🔥 Престиж (сброс до 0, +1 навсегда к клику)';
             } else if (extra.prestige_bonus > 0) {
                 pBtn.style.display = 'inline-block';
                 pBtn.disabled = true;
-                pBtn.textContent = '🔥 Престиж: нужно 10000 🍪 (сейчас ' + score + ')';
+                pBtn.textContent = '🔥 Престиж: нужно 50000 🍪 (сейчас ' + score + ')';
             } else {
                 pBtn.style.display = 'none';
             }
@@ -689,12 +689,12 @@
 
         function renderShop() {
             const allUpgrades = [
-                { key: 'click_bonus_1', icon: '🖊️', name: 'Лучшая ручка',    desc: '+1 к клику · 5 мин',     cost: 100 },
-                { key: 'click_bonus_3', icon: '🦾', name: 'Механическая рука', desc: '+3 к клику · 8 мин',     cost: 500, req: 'click_bonus_1' },
-                { key: 'click_bonus_7', icon: '🤖', name: 'Робот-кликер',     desc: '+7 к клику · 15 мин',    cost: 2000, req: 'click_bonus_3' },
-                { key: 'auto_clicker',  icon: '⚡', name: 'Автокликер',       desc: '+1 🍪/2 сек · 5 мин',    cost: 800 },
-                { key: 'shield',        icon: '🛡️', name: 'Щит',             desc: 'Защита от событий · 5 мин', cost: 500 },
-                { key: 'safe',          icon: '🔒', name: 'Сейф',             desc: '30% печенек в сохранности при атаке · 5 мин', cost: 1000 },
+                { key: 'click_bonus_1', icon: '🖊️', name: 'Лучшая ручка',    desc: '+1 к клику · 5 мин',     cost: 500 },
+                { key: 'click_bonus_3', icon: '🦾', name: 'Механическая рука', desc: '+3 к клику · 8 мин',     cost: 2500, req: 'click_bonus_1' },
+                { key: 'click_bonus_7', icon: '🤖', name: 'Робот-кликер',     desc: '+7 к клику · 15 мин',    cost: 10000, req: 'click_bonus_3' },
+                { key: 'auto_clicker',  icon: '⚡', name: 'Автокликер',       desc: '+1 🍪/2 сек · 5 мин',    cost: 4000 },
+                { key: 'shield',        icon: '🛡️', name: 'Щит',             desc: 'Защита от событий · 5 мин', cost: 2500 },
+                { key: 'safe',          icon: '🔒', name: 'Сейф',             desc: '30% печенек в сохранности при атаке · 5 мин', cost: 5000 },
             ];
             const now = Math.floor(Date.now() / 1000);
             const el = document.getElementById('shop-list');
@@ -1118,9 +1118,9 @@
 
         function renderFuelBuyHtml() {
             let html = '<div style="margin-top:16px;font-weight:700;font-size:14px">⛽ Топливо</div>';
-            html += '<div class="shop-item"><div class="shop-icon" style="font-size:24px">⛽</div><div class="shop-info"><div class="shop-name">Купить топливо</div><div class="shop-desc">50 🍪 за 1 ⛽ (сейчас ' + fuel + ' ⛽)</div></div>';
-            [1, 5, 10].forEach(a => {
-                const canBuy = score >= a * 50;
+            html += '<div class="shop-item"><div class="shop-icon" style="font-size:24px">⛽</div><div class="shop-info"><div class="shop-name">Купить топливо</div><div class="shop-desc">250 🍪 за 1 ⛽ (сейчас ' + fuel + ' ⛽)</div></div>';
+            [1, 5].forEach(a => {
+                const canBuy = score >= a * 250;
                 html += '<button class="shop-btn" data-fuel-amount="' + a + '" ' + (!canBuy ? 'disabled' : '') + '>' + a + ' ⛽</button>';
             });
             html += '</div>';
@@ -1151,9 +1151,9 @@
             if (prestige < 10) return '<div style="margin-top:16px;font-weight:700;font-size:14px;opacity:0.5">✨ Легендарное (открой после 10 престижа)</div>';
             const bought = extra.legendary_bought || [];
             const items = [
-                { key: 'legend_click', name: '✨ +5 к клику навсегда', cost: 10000 },
-                { key: 'legend_auto', name: '✨ Автокликер х2', cost: 20000 },
-                { key: 'legend_energy', name: '✨ +50 энергии макс', cost: 15000 },
+                { key: 'legend_click', name: '✨ +5 к клику навсегда', cost: 50000 },
+                { key: 'legend_auto', name: '✨ Автокликер х2', cost: 100000 },
+                { key: 'legend_energy', name: '✨ +50 энергии макс', cost: 75000 },
             ];
             let html = '<div style="margin-top:16px;font-weight:700;font-size:14px;color:#9c27b0">✨ Легендарное 🌟</div>';
             items.forEach(item => {

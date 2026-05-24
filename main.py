@@ -17,17 +17,17 @@ from database import get_pool, get_user, set_user, get_leaderboard, DEFAULT_EXTR
 PORT = int(os.getenv("PORT", 8000))
 
 UPGRADES = {
-    "click_bonus_1": {"cost": 100,  "field": "click_bonus", "value": 1, "name": "Лучшая ручка",    "duration": 300, "desc": "+1 к клику · 5 мин"},
-    "click_bonus_3": {"cost": 500,  "field": "click_bonus", "value": 3, "name": "Механическая рука","duration": 480, "desc": "+3 к клику · 8 мин", "requires": "click_bonus_1"},
-    "click_bonus_7": {"cost": 2000, "field": "click_bonus", "value": 7, "name": "Робот-кликер",    "duration": 900, "desc": "+7 к клику · 15 мин", "requires": "click_bonus_3"},
-    "auto_clicker":  {"cost": 800,  "field": "auto_clicker","value": 1, "name": "Автокликер",       "duration": 300, "desc": "+1 🍪 каждые 2 сек · 5 мин"},
-    "shield":        {"cost": 500,  "field": "shield",     "value": 300,"name": "Щит",             "duration": 300, "desc": "Защита от событий · 5 мин"},
-    "safe":          {"cost": 1000, "field": "safe",       "value": 30, "name": "Сейф",            "duration": 300, "desc": "Защищает 30% при атаке · 5 мин"},
+    "click_bonus_1": {"cost": 500,  "field": "click_bonus", "value": 1, "name": "Лучшая ручка",    "duration": 300, "desc": "+1 к клику · 5 мин"},
+    "click_bonus_3": {"cost": 2500, "field": "click_bonus", "value": 3, "name": "Механическая рука","duration": 480, "desc": "+3 к клику · 8 мин", "requires": "click_bonus_1"},
+    "click_bonus_7": {"cost": 10000,"field": "click_bonus", "value": 7, "name": "Робот-кликер",    "duration": 900, "desc": "+7 к клику · 15 мин", "requires": "click_bonus_3"},
+    "auto_clicker":  {"cost": 4000, "field": "auto_clicker","value": 1, "name": "Автокликер",       "duration": 300, "desc": "+1 🍪 каждые 2 сек · 5 мин"},
+    "shield":        {"cost": 2500, "field": "shield",     "value": 300,"name": "Щит",             "duration": 300, "desc": "Защита от событий · 5 мин"},
+    "safe":          {"cost": 5000, "field": "safe",       "value": 30, "name": "Сейф",            "duration": 300, "desc": "Защищает 30% при атаке · 5 мин"},
 }
 
-ATTACK_COST = 1000
+ATTACK_COST = 5000
 ATTACK_COOLDOWN = 900
-PRESTIGE_SCORE = 10000
+PRESTIGE_SCORE = 50000
 DAILY_BONUS = 50
 
 REFERRAL_BONUS = 100
@@ -44,12 +44,12 @@ GOLDEN_REWARDS = [
 ]
 
 SKINS = {
-    "default": {"name": "Классическая",  "cost": 0,    "gradient": "radial-gradient(circle at 35% 35%, #f5d68a, #c8943c)", "chips": "#6b4226"},
-    "choco":   {"name": "Шоколадная",    "cost": 500,  "gradient": "radial-gradient(circle at 35% 35%, #8d6e4a, #4a2c1a)", "chips": "#2d1a0a"},
-    "matcha":  {"name": "Матча",         "cost": 800,  "gradient": "radial-gradient(circle at 35% 35%, #b8d9a0, #6b9b4e)", "chips": "#3d5a2e"},
-    "golden":  {"name": "Золотая",       "cost": 1500, "gradient": "radial-gradient(circle at 35% 35%, #ffd700, #b8860b)", "chips": "#6b4c00"},
-    "rainbow": {"name": "Радужная",      "cost": 3000, "gradient": "radial-gradient(circle at 35% 35%, #ff9a9e, #a8e6cf)", "chips": "#6b3b5a"},
-    "space":   {"name": "Космическая",   "cost": 5000, "gradient": "radial-gradient(circle at 35% 35%, #5b2d8e, #1a0a3e)", "chips": "#9c6bdb"},
+    "default": {"name": "Классическая",  "cost": 0,     "gradient": "radial-gradient(circle at 35% 35%, #f5d68a, #c8943c)", "chips": "#6b4226"},
+    "choco":   {"name": "Шоколадная",    "cost": 2500,  "gradient": "radial-gradient(circle at 35% 35%, #8d6e4a, #4a2c1a)", "chips": "#2d1a0a"},
+    "matcha":  {"name": "Матча",         "cost": 4000,  "gradient": "radial-gradient(circle at 35% 35%, #b8d9a0, #6b9b4e)", "chips": "#3d5a2e"},
+    "golden":  {"name": "Золотая",       "cost": 7500,  "gradient": "radial-gradient(circle at 35% 35%, #ffd700, #b8860b)", "chips": "#6b4c00"},
+    "rainbow": {"name": "Радужная",      "cost": 15000, "gradient": "radial-gradient(circle at 35% 35%, #ff9a9e, #a8e6cf)", "chips": "#6b3b5a"},
+    "space":   {"name": "Космическая",   "cost": 25000, "gradient": "radial-gradient(circle at 35% 35%, #5b2d8e, #1a0a3e)", "chips": "#9c6bdb"},
 }
 
 ACHIEVEMENTS = [
@@ -75,9 +75,9 @@ ACHIEVEMENTS = [
 ]
 
 LEGENDARY_UPGRADES = [
-    {"id": "legend_click", "name": "✨ +5 к клику навсегда",  "cost": 10000, "min_prestige": 10, "effect": lambda e: e.update({"prestige_bonus": e.get("prestige_bonus", 0) + 5})},
-    {"id": "legend_auto",  "name": "✨ Автокликер х2",        "cost": 20000, "min_prestige": 10, "effect": lambda e: e.update({"auto_speed": 1000})},
-    {"id": "legend_energy","name": "✨ +50 энергии макс",     "cost": 15000, "min_prestige": 10, "effect": lambda e: e.update({"max_energy": 150})},
+    {"id": "legend_click", "name": "✨ +5 к клику навсегда",  "cost": 50000, "min_prestige": 10, "effect": lambda e: e.update({"prestige_bonus": e.get("prestige_bonus", 0) + 5})},
+    {"id": "legend_auto",  "name": "✨ Автокликер х2",        "cost": 100000, "min_prestige": 10, "effect": lambda e: e.update({"auto_speed": 1000})},
+    {"id": "legend_energy","name": "✨ +50 энергии макс",     "cost": 75000, "min_prestige": 10, "effect": lambda e: e.update({"max_energy": 150})},
 ]
 
 PLANETS = {
@@ -88,7 +88,7 @@ PLANETS = {
     "neptune": {"name": "Нептун",  "fuel_cost": 200,  "duration": 3600, "effect": "auto_clicker","value": 2,   "desc": "Двойной автокликер на 1ч"},
 }
 
-FUEL_COST = 50
+FUEL_COST = 250
 
 STAR_SHOP = [
     {"id": "perm_click",  "name": "👆 +1 к клику навсегда",  "cost": 5,  "effect": lambda e: e.update({"prestige_bonus": e.get("prestige_bonus", 0) + 1})},
@@ -578,12 +578,11 @@ async def handle_referral(request: Request):
     state = await get_user(user_id)
     extra = state.get("extra", dict(DEFAULT_EXTRA))
     referred = extra.get("referred_by", "")
-    return {"referral_link": f"https://t.me/{(await get_bot_username())}?start=ref_{user_id}", "referred_by": referred}
+    return {"referral_link": f"https://t.me/sfarenabot?start=ref_{user_id}", "referred_by": referred}
 
 
 async def get_bot_username():
-    import os
-    return os.getenv("BOT_USERNAME", "mini_app_bot")
+    return "sfarenabot"
 
 
 @app.get("/api/achievements")

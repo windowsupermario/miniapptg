@@ -86,6 +86,12 @@ if DATABASE_URL:
                     user_name = $2, score = $3, active_upgrades = $4, last_attack = $5, notifications = $6, extra = $7
             """, user_id, user_name, score, json.dumps(active_upgrades), json.dumps(last_attack), json.dumps(notifications), json.dumps(extra))
 
+    async def get_all_user_ids() -> list:
+        pool = await get_pool()
+        async with pool.acquire() as conn:
+            rows = await conn.fetch("SELECT user_id FROM users")
+            return [r["user_id"] for r in rows]
+
     async def get_leaderboard(limit: int = 10, sort_by: str = "score") -> list:
         pool = await get_pool()
         async with pool.acquire() as conn:
@@ -150,6 +156,10 @@ else:
             "extra": extra,
         }
         _save(data)
+
+    async def get_all_user_ids() -> list:
+        data = _load()
+        return list(data.keys())
 
     async def get_leaderboard(limit: int = 10, sort_by: str = "score") -> list:
         data = _load()
