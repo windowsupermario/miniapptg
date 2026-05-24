@@ -1090,7 +1090,7 @@
                 <div class="shop-item"><span class="shop-icon">💢</span><div class="shop-info"><div class="shop-name">${e.total_attacks || 0}</div><div class="shop-desc">Атак совершено</div></div></div>
                 <div class="shop-item"><span class="shop-icon">🏆</span><div class="shop-info"><div class="shop-name">${earnedAch} / ${totalAch}</div><div class="shop-desc">Достижений</div></div></div>
                 <div class="shop-item"><span class="shop-icon">🎨</span><div class="shop-info"><div class="shop-name">${ownedSkins.length}</div><div class="shop-desc">Скинов в коллекции</div></div></div>
-                <div class="shop-item"><span class="shop-icon">🔗</span><div class="shop-info"><div class="shop-name" id="ref-link" style="font-size:12px;word-break:break-all">Загрузка...</div><div class="shop-desc">Реферальная ссылка (приведи друга → +100 🍪)</div></div><button class="shop-btn" id="ref-copy-btn" onclick="copyRefLink()">Копировать</button></div>
+                <div class="shop-item"><span class="shop-icon">🔗</span><div class="shop-info"><div class="shop-name" id="ref-link" style="font-size:12px;word-break:break-all">Загрузка...</div><div class="shop-desc">Реферальная ссылка (приведи друга → +100 🍪)</div></div><button class="shop-btn" id="ref-copy-btn" onclick="copyRefLink(this)">Копировать</button></div>
                 <div class="toggle-wrap">
                     <button class="toggle ${notifOn ? 'on' : ''}" id="notif-toggle" onclick="toggleNotifications()"></button>
                     <span style="font-size:13px">Уведомления в Telegram ${notifOn ? 'вкл' : 'выкл'}</span>
@@ -1177,7 +1177,7 @@
             }).join('');
         }
 
-        function copyRefLink() {
+        function copyRefLink(btn) {
             const link = document.getElementById('ref-link').textContent;
             if (tg && tg.Clipboard && tg.Clipboard.setText) {
                 tg.Clipboard.setText(link);
@@ -1192,7 +1192,12 @@
                 document.execCommand('copy');
                 document.body.removeChild(ta);
             }
-            document.getElementById('status').textContent = '✓ Ссылка скопирована';
+            btn.textContent = '✓ Скопировано';
+            btn.style.background = '#4caf50';
+            setTimeout(() => {
+                btn.textContent = 'Копировать';
+                btn.style.background = '';
+            }, 2000);
         }
 
         function regenEnergy() {
