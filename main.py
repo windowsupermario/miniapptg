@@ -32,7 +32,7 @@ DAILY_BONUS = 200
 SPY_COST = 100
 REFERRAL_BONUS = 100
 
-MAX_ENERGY = 100
+MAX_ENERGY = 10
 ENERGY_REGEN_RATE = 3
 ENERGY_PER_CLICK = 1
 FUEL_PER_CLICKS = 50
@@ -93,6 +93,7 @@ STAR_SHOP = [
     {"id": "perm_click",  "name": "👆 +1 к клику навсегда",  "cost": 5,  "effect": lambda e: e.update({"prestige_bonus": e.get("prestige_bonus", 0) + 1})},
     {"id": "perm_attack", "name": "💢 +10% к краже",         "cost": 8,  "effect": lambda e: e.update({"attack_bonus_pct": min(e.get("attack_bonus_pct", 0) + 10, 50)})},
     {"id": "perm_start",  "name": "🚀 +1000 🍪 при старте",   "cost": 3,  "effect": lambda e: e.update({"start_bonus": e.get("start_bonus", 0) + 1000})},
+    {"id": "perm_energy", "name": "⚡ +20 к макс. энергии",    "cost": 5,  "effect": lambda e: e.update({"max_energy": min(e.get("max_energy", MAX_ENERGY) + 20, 500)})},
 ]
 
 

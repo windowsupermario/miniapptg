@@ -294,7 +294,7 @@
         let combo = 0, lastClickTime = 0, clicksSinceSave = 0;
         let goldenEnabled = false;
         let glowActive = false, glowTimer = null;
-        let energy = 100, maxEnergy = 100, fuel = 0;
+        let energy = 10, maxEnergy = 10, fuel = 0;
         let activePlanets = {}, planetsBoost = {}, attackBonus = 0;
 
         const SKINS = {
@@ -332,7 +332,7 @@
             }
             clickBonus += (extra.prestige_bonus || 0);
             if (planetsBoost.click_bonus) clickBonus += planetsBoost.click_bonus;
-            if (planetsBoost.auto_speed || planetsBoost.auto_clicker) autoClicker = 1;
+            if (planetsBoost.auto_speed || planetsBoost.auto_clicker) autoClicker = planetsBoost.auto_clicker || 1;
             if (planetsBoost.shield) shieldUntil = Math.max(shieldUntil, now + planetsBoost.shield);
             attackBonus = planetsBoost.attack_bonus || 0;
             if (!autoClicker && autoTimer) { clearInterval(autoTimer); autoTimer = null; }
@@ -414,15 +414,47 @@
             }
             const CHOICE_EVENTS = [
                 { icon: '🦝', text: 'Вор лезет в кладовую!', choices: [
-                    { text: 'Откупиться 50 🍪', fn: () => { if (score >= 50) { score -= 50; showFloatingText(innerWidth/2, innerHeight/2-40, '-50 🍪', 'loss'); } else { score = Math.max(0, score - 20); showFloatingText(innerWidth/2, innerHeight/2-40, '-20 🍪', 'loss'); } } },
+                    { text: 'Откупиться 50 🍪', fn: () => {
+                        const cost = Math.min(50, score);
+                        score -= cost;
+                        if (Math.random() < 0.5) {
+                            showFloatingText(innerWidth/2, innerHeight/2-40, '-' + cost + ' 🍪 вор ушёл', 'gain');
+                        } else {
+                            const extra = Math.min(30, score);
+                            score -= extra;
+                            showFloatingText(innerWidth/2, innerHeight/2-40, '❌ Вор не ушёл -' + (cost + extra) + ' 🍪', 'loss');
+                        }
+                    } },
                     { text: 'Рискнуть!', fn: () => { if (Math.random() < 0.5) { showFloatingText(innerWidth/2, innerHeight/2-40, '❌ -100 🍪', 'loss'); score = Math.max(0, score - 100); } else { showFloatingText(innerWidth/2, innerHeight/2-40, '✅ Устоял!', 'gain'); } } },
                 ]},
                 { icon: '🐭', text: 'Мыши в кладовке!', choices: [
-                    { text: 'Купить ловушку 30 🍪', fn: () => { if (score >= 30) { score -= 30; } else { score = Math.max(0, score - 20); } } },
+                    { text: 'Купить ловушку 30 🍪', fn: () => {
+                        const cost = Math.min(30, score);
+                        score -= cost;
+                        if (Math.random() < 0.5) {
+                            showFloatingText(innerWidth/2, innerHeight/2-40, '✅ Ловушка сработала!', 'gain');
+                        } else {
+                            const loss = Math.min(score, Math.floor(score * 0.1) || 5);
+                            score -= loss;
+                            showFloatingText(innerWidth/2, innerHeight/2-40, '❌ Ловушка пуста -' + loss + ' 🍪', 'loss');
+                        }
+                    } },
                     { text: 'Игнорировать', fn: () => { const loss = Math.min(score, Math.floor(score * 0.1) || 5); score -= loss; showFloatingText(innerWidth/2, innerHeight/2-40, '-' + loss + ' 🍪', 'loss'); } },
                 ]},
                 { icon: '💔', text: 'Печенье рассыпалось!', choices: [
-                    { text: 'Собрать (спасти половину)', fn: () => { const loss = Math.min(score, Math.floor(score * 0.05) || 3); score -= loss; showFloatingText(innerWidth/2, innerHeight/2-40, '-' + loss + ' 🍪', 'loss'); } },
+                    { text: 'Попробовать собрать', fn: () => {
+                        if (Math.random() < 0.5) {
+                            const savedPct = 0.1 + Math.random() * 0.6;
+                            const wouldLose = Math.min(score, Math.floor(score * 0.15) || 10);
+                            const saved = Math.floor(wouldLose * savedPct);
+                            score -= wouldLose - saved;
+                            showFloatingText(innerWidth/2, innerHeight/2-40, '✅ Спасено ' + saved + ' 🍪 (' + Math.round(savedPct * 100) + '%)', 'gain');
+                        } else {
+                            const loss = Math.min(score, Math.floor(score * 0.15) || 10);
+                            score -= loss;
+                            showFloatingText(innerWidth/2, innerHeight/2-40, '❌ Рассыпалось -' + loss + ' 🍪', 'loss');
+                        }
+                    } },
                     { text: 'Выбросить и забыть', fn: () => { const loss = Math.min(score, Math.floor(score * 0.15) || 10); score -= loss; showFloatingText(innerWidth/2, innerHeight/2-40, '-' + loss + ' 🍪', 'loss'); } },
                 ]},
             ];
@@ -814,6 +846,7 @@
                 { id: 'perm_click', name: '👆 +1 к клику навсегда', cost: 5 },
                 { id: 'perm_attack', name: '💢 +10% к краже', cost: 8 },
                 { id: 'perm_start', name: '🚀 +1000 🍪 при старте', cost: 3 },
+                { id: 'perm_energy', name: '⚡ +20 макс. энергии', cost: 5 },
             ];
             const boughtPermClick = extra.prestige_bonus > 0 || false;
             const stars = extra.stars || 0;
@@ -1082,7 +1115,7 @@
             }
         }
 
-        async         function renderPlanetsHtml() {
+        function renderPlanetsHtml() {
             const now = Math.floor(Date.now() / 1000);
             const planets = [
                 { key: 'mars', name: 'Марс', fuel_cost: 10, desc: '+2 к клику на 1ч' },
