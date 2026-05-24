@@ -299,11 +299,11 @@
 
         const SKINS = {
             default: { name: 'Классическая', cost: 0, gradient: 'radial-gradient(circle at 35% 35%, #f5d68a, #c8943c)', chips: '#6b4226' },
-            choco:   { name: 'Шоколадная',   cost: 200, gradient: 'radial-gradient(circle at 35% 35%, #8d6e4a, #4a2c1a)', chips: '#2d1a0a' },
-            matcha:  { name: 'Матча',        cost: 300, gradient: 'radial-gradient(circle at 35% 35%, #b8d9a0, #6b9b4e)', chips: '#3d5a2e' },
-            golden:  { name: 'Золотая',      cost: 500, gradient: 'radial-gradient(circle at 35% 35%, #ffd700, #b8860b)', chips: '#6b4c00' },
-            rainbow: { name: 'Радужная',     cost: 1000, gradient: 'radial-gradient(circle at 35% 35%, #ff9a9e, #a8e6cf)', chips: '#6b3b5a' },
-            space:   { name: 'Космическая',  cost: 2000, gradient: 'radial-gradient(circle at 35% 35%, #5b2d8e, #1a0a3e)', chips: '#9c6bdb' },
+            choco:   { name: 'Шоколадная',   cost: 500, gradient: 'radial-gradient(circle at 35% 35%, #8d6e4a, #4a2c1a)', chips: '#2d1a0a' },
+            matcha:  { name: 'Матча',        cost: 800, gradient: 'radial-gradient(circle at 35% 35%, #b8d9a0, #6b9b4e)', chips: '#3d5a2e' },
+            golden:  { name: 'Золотая',      cost: 1500, gradient: 'radial-gradient(circle at 35% 35%, #ffd700, #b8860b)', chips: '#6b4c00' },
+            rainbow: { name: 'Радужная',     cost: 3000, gradient: 'radial-gradient(circle at 35% 35%, #ff9a9e, #a8e6cf)', chips: '#6b3b5a' },
+            space:   { name: 'Космическая',  cost: 5000, gradient: 'radial-gradient(circle at 35% 35%, #5b2d8e, #1a0a3e)', chips: '#9c6bdb' },
         };
 
         const UPGRADE_DEFS = {
@@ -690,12 +690,12 @@
 
         function renderShop() {
             const allUpgrades = [
-                { key: 'click_bonus_1', icon: '🖊️', name: 'Лучшая ручка',    desc: '+1 к клику · 5 мин',     cost: 50 },
-                { key: 'click_bonus_3', icon: '🦾', name: 'Механическая рука', desc: '+3 к клику · 8 мин',     cost: 200, req: 'click_bonus_1' },
-                { key: 'click_bonus_7', icon: '🤖', name: 'Робот-кликер',     desc: '+7 к клику · 15 мин',    cost: 800, req: 'click_bonus_3' },
-                { key: 'auto_clicker',  icon: '⚡', name: 'Автокликер',       desc: '+1 🍪/2 сек · 5 мин',    cost: 300 },
-                { key: 'shield',        icon: '🛡️', name: 'Щит',             desc: 'Защита от событий · 5 мин', cost: 200 },
-                { key: 'safe',          icon: '🔒', name: 'Сейф',             desc: '30% печенек в сохранности при атаке · 5 мин', cost: 400 },
+                { key: 'click_bonus_1', icon: '🖊️', name: 'Лучшая ручка',    desc: '+1 к клику · 5 мин',     cost: 100 },
+                { key: 'click_bonus_3', icon: '🦾', name: 'Механическая рука', desc: '+3 к клику · 8 мин',     cost: 500, req: 'click_bonus_1' },
+                { key: 'click_bonus_7', icon: '🤖', name: 'Робот-кликер',     desc: '+7 к клику · 15 мин',    cost: 2000, req: 'click_bonus_3' },
+                { key: 'auto_clicker',  icon: '⚡', name: 'Автокликер',       desc: '+1 🍪/2 сек · 5 мин',    cost: 800 },
+                { key: 'shield',        icon: '🛡️', name: 'Щит',             desc: 'Защита от событий · 5 мин', cost: 500 },
+                { key: 'safe',          icon: '🔒', name: 'Сейф',             desc: '30% печенек в сохранности при атаке · 5 мин', cost: 1000 },
             ];
             const now = Math.floor(Date.now() / 1000);
             const el = document.getElementById('shop-list');
@@ -725,9 +725,10 @@
 
             const skinsHtml = renderSkinsHtml();
             const starHtml = renderStarShopHtml();
+            const fuelHtml = renderFuelBuyHtml();
             const planetHtml = renderPlanetsHtml();
             const legendHtml = renderLegendHtml();
-            el.innerHTML += skinsHtml + starHtml + planetHtml + legendHtml;
+            el.innerHTML += skinsHtml + starHtml + fuelHtml + planetHtml + legendHtml;
 
             el.querySelectorAll('.shop-btn:not(.bought):not([disabled])').forEach(btn => {
                 btn.addEventListener('click', async () => {
@@ -823,6 +824,25 @@
                         extra = d.extra;
                         recalcDerived();
                         showEventPopup('✨', 'Легендарный апгрейд!', 'Куплено!');
+                        renderUI(); scheduleSave();
+                    } else {
+                        document.getElementById('status').textContent = d.error;
+                    }
+                });
+            });
+
+            el.querySelectorAll('[data-fuel-amount]').forEach(btn => {
+                btn.addEventListener('click', async () => {
+                    const amount = parseInt(btn.dataset.fuelAmount);
+                    btn.disabled = true; btn.textContent = '...';
+                    const res = await fetch('/api/fuel/buy', {
+                        method: 'POST', headers: { 'Content-Type': 'application/json', 'x-telegram-user-id': userId },
+                        body: JSON.stringify({ amount }),
+                    });
+                    const d = await res.json();
+                    if (d.ok) {
+                        score = d.score;
+                        fuel = d.fuel;
                         renderUI(); scheduleSave();
                     } else {
                         document.getElementById('status').textContent = d.error;
@@ -1115,6 +1135,17 @@
             }
         }
 
+        function renderFuelBuyHtml() {
+            let html = '<div style="margin-top:16px;font-weight:700;font-size:14px">⛽ Топливо</div>';
+            html += '<div class="shop-item"><div class="shop-icon" style="font-size:24px">⛽</div><div class="shop-info"><div class="shop-name">Купить топливо</div><div class="shop-desc">50 🍪 за 1 ⛽ (сейчас ' + fuel + ' ⛽)</div></div>';
+            [1, 5, 10].forEach(a => {
+                const canBuy = score >= a * 50;
+                html += '<button class="shop-btn" data-fuel-amount="' + a + '" ' + (!canBuy ? 'disabled' : '') + '>' + a + ' ⛽</button>';
+            });
+            html += '</div>';
+            return html;
+        }
+
         function renderPlanetsHtml() {
             const now = Math.floor(Date.now() / 1000);
             const planets = [
@@ -1139,9 +1170,9 @@
             if (prestige < 10) return '<div style="margin-top:16px;font-weight:700;font-size:14px;opacity:0.5">✨ Легендарное (открой после 10 престижа)</div>';
             const bought = extra.legendary_bought || [];
             const items = [
-                { key: 'legend_click', name: '✨ +5 к клику навсегда', cost: 5000 },
-                { key: 'legend_auto', name: '✨ Автокликер х2', cost: 10000 },
-                { key: 'legend_energy', name: '✨ +50 энергии макс', cost: 8000 },
+                { key: 'legend_click', name: '✨ +5 к клику навсегда', cost: 10000 },
+                { key: 'legend_auto', name: '✨ Автокликер х2', cost: 20000 },
+                { key: 'legend_energy', name: '✨ +50 энергии макс', cost: 15000 },
             ];
             let html = '<div style="margin-top:16px;font-weight:700;font-size:14px;color:#9c27b0">✨ Легендарное 🌟</div>';
             items.forEach(item => {

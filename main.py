@@ -17,25 +17,24 @@ from database import get_pool, get_user, set_user, get_leaderboard, DEFAULT_EXTR
 PORT = int(os.getenv("PORT", 8000))
 
 UPGRADES = {
-    "click_bonus_1": {"cost": 50,  "field": "click_bonus", "value": 1, "name": "Лучшая ручка",    "duration": 300, "desc": "+1 к клику · 5 мин"},
-    "click_bonus_3": {"cost": 200, "field": "click_bonus", "value": 3, "name": "Механическая рука","duration": 480, "desc": "+3 к клику · 8 мин", "requires": "click_bonus_1"},
-    "click_bonus_7": {"cost": 800, "field": "click_bonus", "value": 7, "name": "Робот-кликер",    "duration": 900, "desc": "+7 к клику · 15 мин", "requires": "click_bonus_3"},
-    "auto_clicker":  {"cost": 300, "field": "auto_clicker","value": 1, "name": "Автокликер",       "duration": 300, "desc": "+1 🍪 каждые 2 сек · 5 мин"},
-    "shield":        {"cost": 200, "field": "shield",     "value": 300,"name": "Щит",             "duration": 300, "desc": "Защита от событий · 5 мин"},
-    "safe":          {"cost": 400, "field": "safe",       "value": 30, "name": "Сейф",            "duration": 300, "desc": "Защищает 30% при атаке · 5 мин"},
+    "click_bonus_1": {"cost": 100,  "field": "click_bonus", "value": 1, "name": "Лучшая ручка",    "duration": 300, "desc": "+1 к клику · 5 мин"},
+    "click_bonus_3": {"cost": 500,  "field": "click_bonus", "value": 3, "name": "Механическая рука","duration": 480, "desc": "+3 к клику · 8 мин", "requires": "click_bonus_1"},
+    "click_bonus_7": {"cost": 2000, "field": "click_bonus", "value": 7, "name": "Робот-кликер",    "duration": 900, "desc": "+7 к клику · 15 мин", "requires": "click_bonus_3"},
+    "auto_clicker":  {"cost": 800,  "field": "auto_clicker","value": 1, "name": "Автокликер",       "duration": 300, "desc": "+1 🍪 каждые 2 сек · 5 мин"},
+    "shield":        {"cost": 500,  "field": "shield",     "value": 300,"name": "Щит",             "duration": 300, "desc": "Защита от событий · 5 мин"},
+    "safe":          {"cost": 1000, "field": "safe",       "value": 30, "name": "Сейф",            "duration": 300, "desc": "Защищает 30% при атаке · 5 мин"},
 }
 
-ATTACK_COST = 500
+ATTACK_COST = 1000
 ATTACK_COOLDOWN = 900
 PRESTIGE_SCORE = 10000
-DAILY_BONUS = 200
-SPY_COST = 100
+DAILY_BONUS = 50
+SPY_COST = 250
 REFERRAL_BONUS = 100
 
 MAX_ENERGY = 10
 ENERGY_REGEN_RATE = 3
 ENERGY_PER_CLICK = 1
-FUEL_PER_CLICKS = 50
 
 GOLDEN_REWARDS = [
     {"type": "cookies", "value": 50,  "icon": "🍪", "text": "+50 🍪"},
@@ -46,11 +45,11 @@ GOLDEN_REWARDS = [
 
 SKINS = {
     "default": {"name": "Классическая",  "cost": 0,    "gradient": "radial-gradient(circle at 35% 35%, #f5d68a, #c8943c)", "chips": "#6b4226"},
-    "choco":   {"name": "Шоколадная",    "cost": 200,  "gradient": "radial-gradient(circle at 35% 35%, #8d6e4a, #4a2c1a)", "chips": "#2d1a0a"},
-    "matcha":  {"name": "Матча",         "cost": 300,  "gradient": "radial-gradient(circle at 35% 35%, #b8d9a0, #6b9b4e)", "chips": "#3d5a2e"},
-    "golden":  {"name": "Золотая",       "cost": 500,  "gradient": "radial-gradient(circle at 35% 35%, #ffd700, #b8860b)", "chips": "#6b4c00"},
-    "rainbow": {"name": "Радужная",      "cost": 1000, "gradient": "radial-gradient(circle at 35% 35%, #ff9a9e, #a8e6cf)", "chips": "#6b3b5a"},
-    "space":   {"name": "Космическая",   "cost": 2000, "gradient": "radial-gradient(circle at 35% 35%, #5b2d8e, #1a0a3e)", "chips": "#9c6bdb"},
+    "choco":   {"name": "Шоколадная",    "cost": 500,  "gradient": "radial-gradient(circle at 35% 35%, #8d6e4a, #4a2c1a)", "chips": "#2d1a0a"},
+    "matcha":  {"name": "Матча",         "cost": 800,  "gradient": "radial-gradient(circle at 35% 35%, #b8d9a0, #6b9b4e)", "chips": "#3d5a2e"},
+    "golden":  {"name": "Золотая",       "cost": 1500, "gradient": "radial-gradient(circle at 35% 35%, #ffd700, #b8860b)", "chips": "#6b4c00"},
+    "rainbow": {"name": "Радужная",      "cost": 3000, "gradient": "radial-gradient(circle at 35% 35%, #ff9a9e, #a8e6cf)", "chips": "#6b3b5a"},
+    "space":   {"name": "Космическая",   "cost": 5000, "gradient": "radial-gradient(circle at 35% 35%, #5b2d8e, #1a0a3e)", "chips": "#9c6bdb"},
 }
 
 ACHIEVEMENTS = [
@@ -76,9 +75,9 @@ ACHIEVEMENTS = [
 ]
 
 LEGENDARY_UPGRADES = [
-    {"id": "legend_click", "name": "✨ +5 к клику навсегда",  "cost": 5000,  "min_prestige": 10, "effect": lambda e: e.update({"prestige_bonus": e.get("prestige_bonus", 0) + 5})},
-    {"id": "legend_auto",  "name": "✨ Автокликер х2",        "cost": 10000, "min_prestige": 10, "effect": lambda e: e.update({"auto_speed": 1000})},
-    {"id": "legend_energy","name": "✨ +50 энергии макс",     "cost": 8000,  "min_prestige": 10, "effect": lambda e: e.update({"max_energy": 150})},
+    {"id": "legend_click", "name": "✨ +5 к клику навсегда",  "cost": 10000, "min_prestige": 10, "effect": lambda e: e.update({"prestige_bonus": e.get("prestige_bonus", 0) + 5})},
+    {"id": "legend_auto",  "name": "✨ Автокликер х2",        "cost": 20000, "min_prestige": 10, "effect": lambda e: e.update({"auto_speed": 1000})},
+    {"id": "legend_energy","name": "✨ +50 энергии макс",     "cost": 15000, "min_prestige": 10, "effect": lambda e: e.update({"max_energy": 150})},
 ]
 
 PLANETS = {
@@ -88,6 +87,8 @@ PLANETS = {
     "saturn":  {"name": "Сатурн",  "fuel_cost": 100,  "duration": 3600, "effect": "attack_bonus","value": 50,  "desc": "+50% к краже на 1ч"},
     "neptune": {"name": "Нептун",  "fuel_cost": 200,  "duration": 3600, "effect": "auto_clicker","value": 2,   "desc": "Двойной автокликер на 1ч"},
 }
+
+FUEL_COST = 50
 
 STAR_SHOP = [
     {"id": "perm_click",  "name": "👆 +1 к клику навсегда",  "cost": 5,  "effect": lambda e: e.update({"prestige_bonus": e.get("prestige_bonus", 0) + 1})},
@@ -281,8 +282,6 @@ async def handle_update_user(request: Request):
     energy = calc_energy(new_extra)
     energy = max(0, energy - clicks * ENERGY_PER_CLICK)
     new_extra["energy"] = energy
-
-    new_extra["fuel"] = new_extra.get("fuel", 0) + clicks // FUEL_PER_CLICKS
 
     await set_user(
         user_id,
@@ -492,6 +491,26 @@ async def handle_spy(request: Request):
                    state["last_attack"], extra=state.get("extra", dict(DEFAULT_EXTRA)))
 
     return {"ok": True, "target_name": target["user_name"], "target_score": target["score"], "new_score": new_score}
+
+
+@app.post("/api/fuel/buy")
+async def handle_fuel_buy(request: Request):
+    user_id = str(request.headers.get("x-telegram-user-id", "guest"))
+    body = await request.json()
+    amount = max(1, body.get("amount", 1))
+    total_cost = amount * FUEL_COST
+
+    state = await get_user(user_id)
+    if state["score"] < total_cost:
+        return {"ok": False, "error": f"Нужно {total_cost} 🍪 за {amount} ⛽"}
+
+    extra = state.get("extra", dict(DEFAULT_EXTRA))
+    new_score = state["score"] - total_cost
+    extra["fuel"] = extra.get("fuel", 0) + amount
+
+    await set_user(user_id, state["user_name"], new_score, state["active_upgrades"],
+                   state["last_attack"], extra=extra)
+    return {"ok": True, "score": new_score, "fuel": extra["fuel"]}
 
 
 @app.post("/api/golden")
