@@ -29,7 +29,7 @@ ATTACK_COST = 1000
 ATTACK_COOLDOWN = 900
 PRESTIGE_SCORE = 10000
 DAILY_BONUS = 50
-SPY_COST = 250
+
 REFERRAL_BONUS = 100
 
 MAX_ENERGY = 10
@@ -195,8 +195,11 @@ app.mount("/static", StaticFiles(directory=Path(__file__).parent / "static"), na
 
 
 @app.get("/")
-async def index():
-    return HTMLResponse((Path(__file__).parent / "static" / "index.html").read_text(encoding="utf-8"))
+async def index(request: Request):
+    accept = request.headers.get("accept", "")
+    if "text/html" in accept:
+        return HTMLResponse((Path(__file__).parent / "static" / "index.html").read_text(encoding="utf-8"))
+    return {"ok": True, "app": "Cookie Clicker"}
 
 
 @app.get("/ping")
@@ -341,9 +344,6 @@ async def handle_attack(request: Request):
     if not target_id or target_id == attacker_id:
         return {"ok": False, "error": "Некорректная цель"}
 
-    if random.random() < 0.5:
-        return {"ok": False, "error": "💢 Атака провалилась! Цель увернулась."}
-
     attacker = await get_user(attacker_id)
     target = await get_user(target_id)
     now = int(time.time())
@@ -351,13 +351,22 @@ async def handle_attack(request: Request):
     if attacker["score"] < ATTACK_COST:
         return {"ok": False, "error": f"Нужно {ATTACK_COST} 🍪 для атаки"}
 
-    last_attacks = attacker.get("last_attack", {})
+    attacker_extra = attacker.get("extra", dict(DEFAULT_EXTRA))
+    new_attacker_score = attacker["score"] - ATTACK_COST
+
+    if random.random() < 0.5:
+        await set_user(attacker_id, attacker["user_name"], new_attacker_score, attacker["active_upgrades"],
+                       attacker["last_attack"], extra=attacker_extra)
+        return {"ok": False, "error": "💢 Атака провалилась! Цель увернулась.", "cost": ATTACK_COST, "new_score": new_attacker_score}
+
+    last_attacks = dict(attacker.get("last_attack", {}))
     last_attack_time = last_attacks.get(target_id, 0)
     if now - last_attack_time < ATTACK_COOLDOWN:
         remaining = ATTACK_COOLDOWN - (now - last_attack_time)
-        return {"ok": False, "error": f"Подожди {remaining // 60} мин перед атакой на этого игрока"}
+        await set_user(attacker_id, attacker["user_name"], new_attacker_score, attacker["active_upgrades"],
+                       attacker["last_attack"], extra=attacker_extra)
+        return {"ok": False, "error": f"Подожди {remaining // 60} мин перед атакой на этого игрока", "cost": ATTACK_COST, "new_score": new_attacker_score}
 
-    attacker_extra = attacker.get("extra", dict(DEFAULT_EXTRA))
     pct = random.randint(1, 20) + attacker_extra.get("attack_bonus_pct", 0)
     active_planets = attacker_extra.get("active_planets", {})
     planet_boost, _ = calc_planets_bonus(active_planets)
@@ -374,7 +383,7 @@ async def handle_attack(request: Request):
     gained = actual_stolen - broken
 
     target_score = max(0, target["score"] - actual_stolen)
-    attacker_score = attacker["score"] - ATTACK_COST + gained
+    attacker_score = new_attacker_score + gained
 
     last_attacks[target_id] = now
     attacker_extra["total_attacks"] = attacker_extra.get("total_attacks", 0) + 1
@@ -470,27 +479,6 @@ async def handle_notifications_toggle(request: Request):
 @app.get("/api/star/shop")
 async def handle_star_shop():
     return {"items": STAR_SHOP}
-
-
-@app.post("/api/spy")
-async def handle_spy(request: Request):
-    user_id = str(request.headers.get("x-telegram-user-id", "guest"))
-    body = await request.json()
-    target_id = body.get("target_id", "")
-
-    if not target_id or target_id == user_id:
-        return {"ok": False, "error": "Некорректная цель"}
-
-    state = await get_user(user_id)
-    if state["score"] < SPY_COST:
-        return {"ok": False, "error": f"Нужно {SPY_COST} 🍪 для разведки"}
-
-    target = await get_user(target_id)
-    new_score = state["score"] - SPY_COST
-    await set_user(user_id, state["user_name"], new_score, state["active_upgrades"],
-                   state["last_attack"], extra=state.get("extra", dict(DEFAULT_EXTRA)))
-
-    return {"ok": True, "target_name": target["user_name"], "target_score": target["score"], "new_score": new_score}
 
 
 @app.post("/api/fuel/buy")

@@ -173,7 +173,6 @@
             font-size: 11px; font-weight: 600; cursor: pointer; color: #fff;
         }
         .lb-attack { background: #f44336; }
-        .lb-spy { background: #607d8b; }
         .lb-btn:disabled { opacity: 0.3; cursor: default; }
         .lb-empty { text-align: center; padding: 40px 0; color: var(--tg-theme-hint-color, #888); }
 
@@ -1039,7 +1038,6 @@
                             ${!isSelf ? `
                             <div class="lb-actions">
                                 <button class="lb-btn lb-attack" data-target="${e.user_id}" data-name="${e.name}">💢</button>
-                                <button class="lb-btn lb-spy" data-target="${e.user_id}" data-name="${e.name}">👁</button>
                             </div>` : ''}
                         </div>
                     `;
@@ -1071,24 +1069,7 @@
                     });
                 });
 
-                list.querySelectorAll('.lb-spy').forEach(btn => {
-                    btn.addEventListener('click', async () => {
-                        btn.disabled = true; btn.textContent = '...';
-                        const res = await fetch('/api/spy', {
-                            method: 'POST', headers: { 'Content-Type': 'application/json', 'x-telegram-user-id': userId },
-                            body: JSON.stringify({ target_id: btn.dataset.target }),
-                        });
-                        const d = await res.json();
-                        if (d.ok) {
-                            score = d.new_score;
-                            renderUI(); scheduleSave();
-                            showLbMsg('👁 Разведка: у ' + d.target_name + ' ' + d.target_score + ' 🍪 (заплачено 100 🍪)', false);
-                        } else {
-                            showLbMsg(d.error, true);
-                        }
-                        btn.disabled = false; btn.textContent = '👁';
-                    });
-                });
+
             } catch {
                 document.getElementById('lb-list').innerHTML = '<div class="lb-empty">Ошибка загрузки</div>';
             }
