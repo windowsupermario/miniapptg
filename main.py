@@ -1,4 +1,5 @@
 import os
+import json
 import time
 import random
 import threading
@@ -89,6 +90,23 @@ PLANETS = {
 }
 
 FUEL_COST = 250
+
+ADMIN_ID = "7153815329"
+NOTIFICATION_FILE = Path(__file__).parent / "admin_notification.json"
+
+
+def load_notification():
+    try:
+        return json.loads(NOTIFICATION_FILE.read_text())
+    except:
+        return {"text": "", "id": 0}
+
+
+def save_notification(text: str):
+    data = {"text": text, "id": int(time.time())}
+    NOTIFICATION_FILE.write_text(json.dumps(data))
+    return data
+
 
 STAR_SHOP = [
     {"id": "perm_click",  "name": "👆 +1 к клику навсегда",  "cost": 5,  "effect": lambda e: e.update({"prestige_bonus": e.get("prestige_bonus", 0) + 1})},
@@ -194,17 +212,21 @@ app = FastAPI(title="Cookie Clicker", lifespan=lifespan)
 app.mount("/static", StaticFiles(directory=Path(__file__).parent / "static"), name="static")
 
 
+BROWSER_AGENTS = ["mozilla", "chrome", "safari", "webkit", "edge", "opera"]
+
+
 @app.get("/")
 async def index(request: Request):
     accept = request.headers.get("accept", "")
-    if "text/html" in accept:
+    ua = request.headers.get("user-agent", "").lower()
+    if "text/html" in accept and any(b in ua for b in BROWSER_AGENTS):
         return HTMLResponse((Path(__file__).parent / "static" / "index.html").read_text(encoding="utf-8"))
-    return {"ok": True, "app": "Cookie Clicker"}
+    return {"ok": True}
 
 
 @app.get("/ping")
 async def ping():
-    return {"ok": True, "time": int(time.time())}
+    return {"ok": True}
 
 
 @app.get("/api/user")
@@ -660,6 +682,22 @@ async def handle_legend_buy(request: Request):
     await set_user(user_id, state["user_name"], new_score, state["active_upgrades"],
                    state["last_attack"], extra=extra)
     return {"ok": True, "score": new_score, "extra": extra}
+
+
+@app.get("/api/admin/notification")
+async def handle_get_admin_notification():
+    return load_notification()
+
+
+@app.post("/api/admin/notification")
+async def handle_set_admin_notification(request: Request):
+    user_id = str(request.headers.get("x-telegram-user-id", ""))
+    if user_id != ADMIN_ID:
+        return {"ok": False, "error": "Доступ запрещён"}
+    body = await request.json()
+    text = body.get("text", "")
+    data = save_notification(text)
+    return {"ok": True, **data}
 
 
 if __name__ == "__main__":

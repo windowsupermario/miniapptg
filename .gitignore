@@ -7,3 +7,4 @@ ngrok.exe
 .venv/
 
 railway.exe
+admin_notification.json
