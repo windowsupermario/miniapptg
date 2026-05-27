@@ -700,6 +700,86 @@ async def handle_set_admin_notification(request: Request):
     return {"ok": True, **data}
 
 
+SHOP_CONFIG_FILE = Path(__file__).parent / "shop_config.json"
+
+
+def load_shop_config():
+    try:
+        return json.loads(SHOP_CONFIG_FILE.read_text())
+    except:
+        return {}
+
+
+def save_shop_config(data: dict):
+    SHOP_CONFIG_FILE.write_text(json.dumps(data, indent=2))
+
+
+def merge_shop_overrides(overrides: dict) -> dict:
+    result = {}
+    for k, v in UPGRADES.items():
+        item = dict(v)
+        if k in overrides:
+            item.update(overrides[k])
+        result[k] = item
+    return result
+
+
+@app.get("/api/shop/upgrades")
+async def handle_shop_upgrades():
+    overrides = load_shop_config()
+    return {"upgrades": merge_shop_overrides(overrides)}
+
+
+@app.get("/api/admin/shop")
+async def handle_admin_get_shop(request: Request):
+    user_id = str(request.headers.get("x-telegram-user-id", ""))
+    if user_id != ADMIN_ID:
+        return {"ok": False, "error": "Доступ запрещён"}
+    overrides = load_shop_config()
+    return {"ok": True, "upgrades": merge_shop_overrides(overrides)}
+
+
+@app.post("/api/admin/shop/price")
+async def handle_admin_set_price(request: Request):
+    user_id = str(request.headers.get("x-telegram-user-id", ""))
+    if user_id != ADMIN_ID:
+        return {"ok": False, "error": "Доступ запрещён"}
+    body = await request.json()
+    key = body.get("key", "")
+    if key not in UPGRADES:
+        return {"ok": False, "error": "Неизвестный товар"}
+    overrides = load_shop_config()
+    if key not in overrides:
+        overrides[key] = {}
+    if "cost" in body:
+        overrides[key]["cost"] = int(body["cost"])
+    if "name" in body:
+        overrides[key]["name"] = str(body["name"])
+    if "duration" in body:
+        overrides[key]["duration"] = int(body["duration"])
+    save_shop_config(overrides)
+    return {"ok": True, "upgrades": merge_shop_overrides(overrides)}
+
+
+@app.post("/api/admin/user/balance")
+async def handle_admin_user_balance(request: Request):
+    user_id = str(request.headers.get("x-telegram-user-id", ""))
+    if user_id != ADMIN_ID:
+        return {"ok": False, "error": "Доступ запрещён"}
+    body = await request.json()
+    target_id = str(body.get("user_id", ""))
+    new_score = int(body.get("score", 0))
+    if not target_id:
+        return {"ok": False, "error": "Не указан user_id"}
+    try:
+        state = await get_user(target_id)
+        await set_user(target_id, state["user_name"], new_score, state["active_upgrades"],
+                       state["last_attack"], extra=state.get("extra", dict(DEFAULT_EXTRA)))
+        return {"ok": True, "user_id": target_id, "new_score": new_score}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("main:app", host="0.0.0.0", port=PORT)

@@ -235,6 +235,20 @@
         .admin-btn.clear { background: #f44336; }
         .admin-btn:disabled { opacity: 0.5; cursor: default; }
         .admin-status { margin-top: 8px; font-size: 12px; color: var(--tg-theme-hint-color, #888); }
+        .admin-item {
+            padding: 10px; margin-bottom: 8px;
+            background: var(--tg-theme-secondary-bg-color, #f0f0f0);
+            border-radius: 10px; font-size: 13px;
+        }
+        .admin-item input {
+            padding: 6px 8px; border-radius: 6px; border: 1px solid #ccc;
+            font-size: 12px; width: 80px;
+        }
+        .admin-item .save-btn {
+            padding: 6px 12px; border: none; border-radius: 6px;
+            background: var(--tg-theme-button-color, #2481cc);
+            color: #fff; font-size: 12px; font-weight: 600; cursor: pointer;
+        }
 
         .notif-banner {
             position: fixed; bottom: 0; left: 0; right: 0;
@@ -326,6 +340,21 @@
             </div>
             <div class="admin-status" id="admin-status"></div>
         </div>
+
+        <div class="admin-section" style="margin-top:16px">
+            <label>💰 Баланс пользователя</label>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;padding:10px;background:var(--tg-theme-secondary-bg-color,#f0f0f0);border-radius:10px;margin-top:6px">
+                <input type="text" id="admin-balance-userid" placeholder="User ID" style="padding:8px;border-radius:8px;border:1px solid #ccc;font-size:13px;flex:1;min-width:100px">
+                <input type="number" id="admin-balance-score" placeholder="Новый счёт 🍪" style="width:120px;padding:8px;border-radius:8px;border:1px solid #ccc;font-size:13px">
+                <button class="admin-btn send" id="admin-balance-btn" style="flex:0;padding:8px 16px">Установить</button>
+            </div>
+            <div style="margin-top:8px;font-size:12px;color:var(--tg-theme-hint-color,#888)" id="admin-balance-status"></div>
+        </div>
+
+        <div class="admin-section" style="margin-top:16px">
+            <label>🏪 Цены магазина</label>
+            <div id="admin-shop-list" style="margin-top:6px"></div>
+        </div>
     </div>
 
     <div id="golden-cookie" class="golden-cookie">🌟</div>
@@ -346,6 +375,7 @@
         let saveTimer = null, autoTimer = null, shieldTimer = null, eventTimer = null;
         let recalcTimer = null, goldenTimer = null, comboResets = null;
         let combo = 0, lastClickTime = 0, clicksSinceSave = 0;
+        let shopPrices = null;
         let goldenEnabled = false;
         let glowActive = false, glowTimer = null;
         let energy = 10, maxEnergy = 10, fuel = 0;
@@ -743,8 +773,16 @@
             return m + ':' + String(s).padStart(2, '0');
         }
 
+        async function loadShopPrices() {
+            try {
+                const res = await fetch('/api/shop/upgrades');
+                const d = await res.json();
+                shopPrices = d.upgrades || {};
+            } catch { shopPrices = {}; }
+        }
+
         function renderShop() {
-            const allUpgrades = [
+            const defs = [
                 { key: 'click_bonus_1', icon: '🖊️', name: 'Лучшая ручка',    desc: '+1 к клику · 5 мин',     cost: 500 },
                 { key: 'click_bonus_3', icon: '🦾', name: 'Механическая рука', desc: '+3 к клику · 8 мин',     cost: 2500, req: 'click_bonus_1' },
                 { key: 'click_bonus_7', icon: '🤖', name: 'Робот-кликер',     desc: '+7 к клику · 15 мин',    cost: 10000, req: 'click_bonus_3' },
@@ -752,6 +790,10 @@
                 { key: 'shield',        icon: '🛡️', name: 'Щит',             desc: 'Защита от событий · 5 мин', cost: 2500 },
                 { key: 'safe',          icon: '🔒', name: 'Сейф',             desc: '30% печенек в сохранности при атаке · 5 мин', cost: 5000 },
             ];
+            const allUpgrades = defs.map(u => {
+                const server = shopPrices && shopPrices[u.key];
+                return { ...u, cost: server ? server.cost : u.cost, duration: server ? server.duration : undefined };
+            });
             const now = Math.floor(Date.now() / 1000);
             const el = document.getElementById('shop-list');
             el.innerHTML = allUpgrades.map(u => {
@@ -1027,6 +1069,7 @@
                 setInterval(updateShieldDisplay, 1000);
                 recalcTimer = setInterval(() => { recalcDerived(); renderUI(); }, 1000);
 
+                loadShopPrices();
                 goldenEnabled = true;
                 scheduleGoldenCookie();
                 scheduleGlow();
@@ -1308,7 +1351,76 @@
                 const d = await res.json();
                 document.getElementById('admin-notif-input').value = d.text || '';
             } catch {}
+            renderAdminShop();
         }
+
+        async function renderAdminShop() {
+            try {
+                const res = await fetch('/api/admin/shop', { headers: { 'x-telegram-user-id': userId } });
+                const d = await res.json();
+                if (!d.ok) return;
+                const upgrades = d.upgrades || {};
+                const el = document.getElementById('admin-shop-list');
+                el.innerHTML = Object.entries(upgrades).map(([key, item]) => `
+                    <div class="admin-item" data-key="${key}">
+                        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+                            <span style="font-weight:600">${item.icon || '🛒'} ${item.name}</span>
+                            <span style="font-size:11px;color:#888">${key}</span>
+                        </div>
+                        <div style="display:flex;gap:8px;margin-top:6px;align-items:center;flex-wrap:wrap">
+                            <span style="font-size:12px">Цена:</span>
+                            <input type="number" class="admin-shop-cost" value="${item.cost}" style="width:80px">
+                            <span style="font-size:12px">Длит.(с):</span>
+                            <input type="number" class="admin-shop-dur" value="${item.duration}" style="width:60px">
+                            <button class="save-btn" onclick="adminSaveShopPrice('${key}')">💾</button>
+                        </div>
+                    </div>
+                `).join('');
+            } catch {}
+        }
+
+        async function adminSaveShopPrice(key) {
+            const div = document.querySelector(`.admin-item[data-key="${key}"]`);
+            if (!div) return;
+            const cost = parseInt(div.querySelector('.admin-shop-cost').value) || 0;
+            const duration = parseInt(div.querySelector('.admin-shop-dur').value) || 300;
+            try {
+                const res = await fetch('/api/admin/shop/price', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json', 'x-telegram-user-id': userId },
+                    body: JSON.stringify({ key, cost, duration }),
+                });
+                const d = await res.json();
+                if (d.ok) {
+                    document.getElementById('admin-status').textContent = '✓ Цена обновлена';
+                } else {
+                    document.getElementById('admin-status').textContent = '✗ ' + (d.error || 'Ошибка');
+                }
+            } catch {
+                document.getElementById('admin-status').textContent = '✗ Ошибка';
+            }
+        }
+
+        document.getElementById('admin-balance-btn').addEventListener('click', async () => {
+            const targetId = document.getElementById('admin-balance-userid').value.trim();
+            const newScore = parseInt(document.getElementById('admin-balance-score').value) || 0;
+            const status = document.getElementById('admin-balance-status');
+            if (!targetId) { status.textContent = '✗ Укажите User ID'; return; }
+            status.textContent = '⏳...';
+            try {
+                const res = await fetch('/api/admin/user/balance', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json', 'x-telegram-user-id': userId },
+                    body: JSON.stringify({ user_id: targetId, score: newScore }),
+                });
+                const d = await res.json();
+                if (d.ok) {
+                    status.textContent = '✓ Баланс ' + targetId + ' установлен: ' + newScore + ' 🍪';
+                } else {
+                    status.textContent = '✗ ' + (d.error || 'Ошибка');
+                }
+            } catch {
+                status.textContent = '✗ Ошибка';
+            }
+        });
 
         document.getElementById('admin-send-btn').addEventListener('click', async () => {
             const text = document.getElementById('admin-notif-input').value.trim();
