@@ -319,9 +319,48 @@
         </div>
 
         <div class="admin-section" style="margin-top:16px">
-            <label>🏪 Цены магазина</label>
+            <label>🗑️ Сброс прогресса игрока</label>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;padding:10px;background:var(--tg-theme-secondary-bg-color,#f0f0f0);border-radius:10px;margin-top:6px">
+                <input type="text" id="admin-reset-userid" placeholder="User ID" style="padding:8px;border-radius:8px;border:1px solid #ccc;font-size:13px;flex:1;min-width:100px">
+                <button class="admin-btn clear" id="admin-reset-btn" style="flex:0;padding:8px 16px">Сбросить</button>
+            </div>
+            <div style="margin-top:8px;font-size:12px;color:var(--tg-theme-hint-color,#888)" id="admin-reset-status"></div>
+        </div>
+
+        <div class="admin-section" style="margin-top:16px">
+            <label>🏪 Цены магазина (улучшения)</label>
             <div id="admin-shop-list" style="margin-top:6px"></div>
             <div style="margin-top:8px;font-size:12px;color:var(--tg-theme-hint-color,#888)" id="admin-shop-status"></div>
+        </div>
+
+        <div class="admin-section" style="margin-top:16px">
+            <label>🎨 Скины</label>
+            <div id="admin-skins-list" style="margin-top:6px"></div>
+            <div style="margin-top:8px;font-size:12px;color:var(--tg-theme-hint-color,#888)" id="admin-skins-status"></div>
+        </div>
+
+        <div class="admin-section" style="margin-top:16px">
+            <label>⭐ Звёздный магазин</label>
+            <div id="admin-star-list" style="margin-top:6px"></div>
+            <div style="margin-top:8px;font-size:12px;color:var(--tg-theme-hint-color,#888)" id="admin-star-status"></div>
+        </div>
+
+        <div class="admin-section" style="margin-top:16px">
+            <label>🚀 Планеты (топливо)</label>
+            <div id="admin-planets-list" style="margin-top:6px"></div>
+            <div style="margin-top:8px;font-size:12px;color:var(--tg-theme-hint-color,#888)" id="admin-planets-status"></div>
+        </div>
+
+        <div class="admin-section" style="margin-top:16px">
+            <label>✨ Легендарное</label>
+            <div id="admin-legendary-list" style="margin-top:6px"></div>
+            <div style="margin-top:8px;font-size:12px;color:var(--tg-theme-hint-color,#888)" id="admin-legendary-status"></div>
+        </div>
+
+        <div class="admin-section" style="margin-top:16px">
+            <label>⚙️ Константы</label>
+            <div id="admin-constants-list" style="margin-top:6px"></div>
+            <div style="margin-top:8px;font-size:12px;color:var(--tg-theme-hint-color,#888)" id="admin-constants-status"></div>
         </div>
     </div>
 
@@ -339,6 +378,7 @@
         let recalcTimer = null, goldenTimer = null, comboResets = null;
         let combo = 0, lastClickTime = 0, clicksSinceSave = 0, autoClicksSinceSave = 0;
         let shopPrices = null;
+        let allConfig = null;
         let goldenEnabled = false;
         let glowActive = false, glowTimer = null;
         let energy = 10, maxEnergy = 10, fuel = 0;
@@ -725,6 +765,26 @@
             } catch { shopPrices = {}; }
         }
 
+        async function loadAllConfig() {
+            try {
+                const res = await fetch('/api/shop/all');
+                const d = await res.json();
+                allConfig = d.config || null;
+            } catch { allConfig = null; }
+        }
+
+        function cfgPrice(cat, key, field) {
+            if (!allConfig) return null;
+            const c = allConfig[cat];
+            if (!c) return null;
+            if (Array.isArray(c)) {
+                const item = c.find(x => x.id === key);
+                return item ? item[field] : null;
+            }
+            const item = c[key];
+            return item ? item[field] : null;
+        }
+
         function fmtDuration(secs) {
             const m = Math.floor(secs / 60);
             const s = secs % 60;
@@ -915,7 +975,10 @@
                 { id: 'perm_attack', name: '💢 +10% к краже', cost: 8 },
                 { id: 'perm_start', name: '🚀 +1000 🍪 при старте', cost: 3 },
                 { id: 'perm_energy', name: '⚡ +20 макс. энергии', cost: 5 },
-            ];
+            ].map(item => ({
+                ...item,
+                cost: cfgPrice('star_shop', item.id, 'cost') ?? item.cost,
+            }));
             const boughtPermClick = extra.prestige_bonus > 0 || false;
             const stars = extra.stars || 0;
             let html = '<div style="margin-top:16px;font-weight:700;font-size:14px">⭐ Магазин звёзд (у тебя ' + stars + ' ⭐)</div>';
@@ -931,9 +994,10 @@
             let html = '<div style="margin-top:16px;font-weight:700;font-size:14px">🎨 Скины</div>';
             skinKeys.forEach(key => {
                 const s = SKINS[key];
+                const cost = cfgPrice('skins', key, 'cost') ?? s.cost;
                 const owned = ownedSkins.includes(key);
                 const active = currentSkin === key;
-                const canBuy = score >= s.cost && !owned;
+                const canBuy = score >= cost && !owned;
                 html += `
                     <div class="shop-item" style="${active ? 'border:2px solid #4caf50' : ''}">
                         <div style="width:28px;height:28px;border-radius:50%;background:${s.gradient};flex-shrink:0"></div>
@@ -941,7 +1005,7 @@
                             <div class="shop-name">${s.name} ${active ? '✓' : ''}</div>
                             <div class="shop-desc">${owned ? 'в коллекции' : ''}</div>
                         </div>
-                        ${!owned ? `<button class="shop-btn" data-skin="${key}" ${!canBuy ? 'disabled' : ''}>${s.cost ? s.cost + ' 🍪' : 'Бесплатно'}</button>`
+                        ${!owned ? `<button class="shop-btn" data-skin="${key}" ${!canBuy ? 'disabled' : ''}>${cost ? cost + ' 🍪' : 'Бесплатно'}</button>`
                                  : `<button class="shop-btn bought" data-select="${key}" ${active ? 'disabled' : ''}>Надеть</button>`}
                     </div>
                 `;
@@ -1022,6 +1086,7 @@
                 recalcTimer = setInterval(() => { recalcDerived(); renderUI(); }, 1000);
 
                 loadShopPrices();
+                loadAllConfig();
                 goldenEnabled = true;
                 scheduleGoldenCookie();
                 scheduleGlow();
@@ -1134,6 +1199,7 @@
         function renderStats() {
             const e = extra;
             const earnedAch = (e.achievements || []).length;
+            const refBonus = cfgPrice('constants', 'referral_bonus', 'value') ?? 100;
             let html = `
                 <div style="font-weight:700;font-size:14px;margin-bottom:8px">👤 Профиль</div>
                 <div class="shop-item"><span class="shop-icon">🍪</span><div class="shop-info"><div class="shop-name">${score}</div><div class="shop-desc">Текущий счёт</div></div></div>
@@ -1144,7 +1210,7 @@
                 <div class="shop-item"><span class="shop-icon">💢</span><div class="shop-info"><div class="shop-name">${e.total_attacks || 0}</div><div class="shop-desc">Атак совершено</div></div></div>
                 <div class="shop-item"><span class="shop-icon">🏆</span><div class="shop-info"><div class="shop-name">${earnedAch} / ${totalAchCount}</div><div class="shop-desc">Достижений</div></div></div>
                 <div class="shop-item"><span class="shop-icon">🎨</span><div class="shop-info"><div class="shop-name">${ownedSkins.length}</div><div class="shop-desc">Скинов в коллекции</div></div></div>
-                <div class="shop-item"><span class="shop-icon">🔗</span><div class="shop-info"><div class="shop-name" id="ref-link" style="font-size:12px;word-break:break-all">Загрузка...</div><div class="shop-desc">Реферальная ссылка (приведи друга → +100 🍪)</div></div><button class="shop-btn" id="ref-copy-btn" onclick="copyRefLink(this)">Копировать</button></div>
+                <div class="shop-item"><span class="shop-icon">🔗</span><div class="shop-info"><div class="shop-name" id="ref-link" style="font-size:12px;word-break:break-all">Загрузка...</div><div class="shop-desc">Реферальная ссылка (приведи друга → +${refBonus} 🍪 тебе и ${Math.floor(refBonus/2)} новичку)</div></div><button class="shop-btn" id="ref-copy-btn" onclick="copyRefLink(this)">Копировать</button></div>
                 <div style="font-weight:700;font-size:14px;margin:12px 0 8px">🎯 Достижения</div>
                 <div id="ach-list"></div>
             `;
@@ -1156,9 +1222,10 @@
         }
 
         function renderFuelBuyHtml() {
+            const fuelCost = cfgPrice('constants', 'fuel_cost', 'value') ?? 250;
             let html = '<div style="margin-top:16px;font-weight:700;font-size:14px">⛽ Топливо</div>';
             html += '<div class="shop-item"><div class="shop-icon" style="font-size:24px">⛽</div><div class="shop-info"><div class="shop-name">Купить топливо</div><div class="shop-desc">сейчас ' + fuel + ' ⛽</div></div>';
-            html += '<button class="shop-btn" data-fuel-amount="1" ' + (score < 250 ? 'disabled' : '') + '>1 ⛽ · 250 🍪</button>';
+            html += '<button class="shop-btn" data-fuel-amount="1" ' + (score < fuelCost ? 'disabled' : '') + '>1 ⛽ · ' + fuelCost + ' 🍪</button>';
             html += '</div>';
             return html;
         }
@@ -1171,7 +1238,10 @@
                 { key: 'jupiter', name: 'Юпитер', fuel_cost: 50, desc: 'Щит на 1ч' },
                 { key: 'saturn', name: 'Сатурн', fuel_cost: 100, desc: '+50% к краже на 1ч' },
                 { key: 'neptune', name: 'Нептун', fuel_cost: 200, desc: 'Двойной автокликер на 1ч' },
-            ];
+            ].map(p => ({
+                ...p,
+                fuel_cost: cfgPrice('planets', p.key, 'fuel_cost') ?? p.fuel_cost,
+            }));
             let html = '<div style="margin-top:16px;font-weight:700;font-size:14px">🚀 Космос (⛽ ' + fuel + ' топлива)</div>';
             planets.forEach(p => {
                 const expiry = activePlanets[p.key] || 0;
@@ -1190,7 +1260,10 @@
                 { key: 'legend_click', name: '✨ +5 к клику навсегда', cost: 50000 },
                 { key: 'legend_auto', name: '✨ Автокликер х2', cost: 100000 },
                 { key: 'legend_energy', name: '✨ +50 энергии макс', cost: 75000 },
-            ];
+            ].map(item => ({
+                ...item,
+                cost: cfgPrice('legendary', item.key, 'cost') ?? item.cost,
+            }));
             let html = '<div style="margin-top:16px;font-weight:700;font-size:14px;color:#9c27b0">✨ Легендарное 🌟</div>';
             items.forEach(item => {
                 const isBought = bought.includes(item.key);
@@ -1285,6 +1358,11 @@
 
         async function loadAdminPage() {
             renderAdminShop();
+            renderAdminSkins();
+            renderAdminStarShop();
+            renderAdminPlanets();
+            renderAdminLegendary();
+            renderAdminConstants();
         }
 
         async function renderAdminShop() {
@@ -1312,13 +1390,155 @@
             } catch {}
         }
 
-        async function adminSaveShopPrice(key) {
-            const div = document.querySelector(`.admin-item[data-key="${key}"]`);
+        async function renderAdminSkins() {
+            try {
+                const res = await fetch('/api/admin/all-config', { headers: { 'x-telegram-user-id': userId } });
+                const d = await res.json();
+                if (!d.ok) return;
+                const skins = d.config.skins || {};
+                const el = document.getElementById('admin-skins-list');
+                el.innerHTML = Object.entries(skins).map(([key, s]) => {
+                    if (key === 'default') return '';
+                    return `
+                    <div class="admin-item" data-key="${key}">
+                        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+                            <span style="font-weight:600">${s.name}</span>
+                            <span style="font-size:11px;color:#888">${key}</span>
+                        </div>
+                        <div style="display:flex;gap:8px;margin-top:6px;align-items:center;flex-wrap:wrap">
+                            <span style="font-size:12px">Цена:</span>
+                            <input type="number" class="admin-val" value="${s.cost}" style="width:80px">
+                            <button class="save-btn" onclick="adminSaveConfig('skins','${key}','cost')">💾</button>
+                        </div>
+                    </div>`;
+                }).join('');
+            } catch {}
+        }
+
+        async function renderAdminStarShop() {
+            try {
+                const res = await fetch('/api/admin/all-config', { headers: { 'x-telegram-user-id': userId } });
+                const d = await res.json();
+                if (!d.ok) return;
+                const items = d.config.star_shop || [];
+                const el = document.getElementById('admin-star-list');
+                el.innerHTML = items.map(item => `
+                    <div class="admin-item" data-key="${item.id}">
+                        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+                            <span style="font-weight:600">${item.name}</span>
+                            <span style="font-size:11px;color:#888">${item.id}</span>
+                        </div>
+                        <div style="display:flex;gap:8px;margin-top:6px;align-items:center;flex-wrap:wrap">
+                            <span style="font-size:12px">Цена (⭐):</span>
+                            <input type="number" class="admin-val" value="${item.cost}" style="width:80px">
+                            <button class="save-btn" onclick="adminSaveConfig('star_shop','${item.id}','cost')">💾</button>
+                        </div>
+                    </div>
+                `).join('');
+            } catch {}
+        }
+
+        async function renderAdminPlanets() {
+            try {
+                const res = await fetch('/api/admin/all-config', { headers: { 'x-telegram-user-id': userId } });
+                const d = await res.json();
+                if (!d.ok) return;
+                const planets = d.config.planets || {};
+                const el = document.getElementById('admin-planets-list');
+                el.innerHTML = Object.entries(planets).map(([key, p]) => `
+                    <div class="admin-item" data-key="${key}">
+                        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+                            <span style="font-weight:600">${p.name}</span>
+                            <span style="font-size:11px;color:#888">${key}</span>
+                        </div>
+                        <div style="display:flex;gap:8px;margin-top:6px;align-items:center;flex-wrap:wrap">
+                            <span style="font-size:12px">⛽:</span>
+                            <input type="number" class="admin-val" value="${p.fuel_cost}" style="width:80px">
+                            <button class="save-btn" onclick="adminSaveConfig('planets','${key}','fuel_cost')">💾</button>
+                        </div>
+                    </div>
+                `).join('');
+            } catch {}
+        }
+
+        async function renderAdminLegendary() {
+            try {
+                const res = await fetch('/api/admin/all-config', { headers: { 'x-telegram-user-id': userId } });
+                const d = await res.json();
+                if (!d.ok) return;
+                const items = d.config.legendary || [];
+                const el = document.getElementById('admin-legendary-list');
+                el.innerHTML = items.map(item => `
+                    <div class="admin-item" data-key="${item.id}">
+                        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+                            <span style="font-weight:600">${item.name}</span>
+                            <span style="font-size:11px;color:#888">${item.id}</span>
+                        </div>
+                        <div style="display:flex;gap:8px;margin-top:6px;align-items:center;flex-wrap:wrap">
+                            <span style="font-size:12px">Цена:</span>
+                            <input type="number" class="admin-val" value="${item.cost}" style="width:80px">
+                            <button class="save-btn" onclick="adminSaveConfig('legendary','${item.id}','cost')">💾</button>
+                        </div>
+                    </div>
+                `).join('');
+            } catch {}
+        }
+
+        async function renderAdminConstants() {
+            try {
+                const res = await fetch('/api/admin/all-config', { headers: { 'x-telegram-user-id': userId } });
+                const d = await res.json();
+                if (!d.ok) return;
+                const constants = d.config.constants || {};
+                const el = document.getElementById('admin-constants-list');
+                el.innerHTML = Object.entries(constants).map(([key, c]) => `
+                    <div class="admin-item" data-key="${key}">
+                        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+                            <span style="font-weight:600">${c.label}</span>
+                            <span style="font-size:11px;color:#888">${key}</span>
+                        </div>
+                        <div style="display:flex;gap:8px;margin-top:6px;align-items:center;flex-wrap:wrap">
+                            <input type="number" class="admin-val" value="${c.value}" style="width:100px">
+                            <button class="save-btn" onclick="adminSaveConst('${key}')">💾</button>
+                        </div>
+                    </div>
+                `).join('');
+            } catch {}
+        }
+
+        async function adminSaveConfig(category, key, field) {
+            const div = document.querySelector(`#admin-${category}-list .admin-item[data-key="${key}"]`);
             if (!div) return;
-            const costInput = div.querySelector('.admin-shop-cost');
-            const durInput = div.querySelector('.admin-shop-dur');
-            const cost = parseInt(costInput.value);
-            const duration = parseInt(durInput.value);
+            const val = parseInt(div.querySelector('.admin-val').value);
+            if (isNaN(val) || val < 0) {
+                document.getElementById(`admin-${category}-status`).textContent = '✗ Некорректное значение';
+                return;
+            }
+            const statusEl = document.getElementById(`admin-${category}-status`);
+            statusEl.textContent = '⏳...';
+            try {
+                const res = await fetch('/api/admin/set-config', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json', 'x-telegram-user-id': userId },
+                    body: JSON.stringify({ category, key, field, value: val }),
+                });
+                const d = await res.json();
+                if (d.ok) {
+                    statusEl.textContent = '✓ Сохранено';
+                    loadAllConfig();
+                    if (category === 'upgrades') { loadShopPrices(); renderAdminShop(); }
+                } else {
+                    statusEl.textContent = '✗ ' + (d.error || 'Ошибка');
+                }
+            } catch {
+                statusEl.textContent = '✗ Ошибка';
+            }
+        }
+
+        async function adminSaveShopPrice(key) {
+            const div = document.querySelector(`#admin-shop-list .admin-item[data-key="${key}"]`);
+            if (!div) return;
+            const cost = parseInt(div.querySelector('.admin-shop-cost').value);
+            const duration = parseInt(div.querySelector('.admin-shop-dur').value);
             if (isNaN(cost) || cost < 0) {
                 document.getElementById('admin-shop-status').textContent = '✗ Некорректная цена';
                 return;
@@ -1327,21 +1547,51 @@
                 document.getElementById('admin-shop-status').textContent = '✗ Длительность минимум 10 сек';
                 return;
             }
+            document.getElementById('admin-shop-status').textContent = '⏳...';
             try {
-                const res = await fetch('/api/admin/shop/price', {
+                const res = await fetch('/api/admin/set-config', {
                     method: 'POST', headers: { 'Content-Type': 'application/json', 'x-telegram-user-id': userId },
-                    body: JSON.stringify({ key, cost, duration }),
+                    body: JSON.stringify({ category: 'upgrades', key, field: 'cost', value: cost }),
                 });
                 const d = await res.json();
-                if (d.ok) {
+                if (!d.ok) { document.getElementById('admin-shop-status').textContent = '✗ ' + (d.error || 'Ошибка'); return; }
+                const res2 = await fetch('/api/admin/set-config', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json', 'x-telegram-user-id': userId },
+                    body: JSON.stringify({ category: 'upgrades', key, field: 'duration', value: duration }),
+                });
+                const d2 = await res2.json();
+                if (d2.ok) {
                     document.getElementById('admin-shop-status').textContent = '✓ Цена обновлена';
-                    await loadShopPrices();
-                    renderAdminShop();
+                    loadShopPrices(); loadAllConfig(); renderAdminShop();
                 } else {
-                    document.getElementById('admin-shop-status').textContent = '✗ ' + (d.error || 'Ошибка');
+                    document.getElementById('admin-shop-status').textContent = '✗ ' + (d2.error || 'Ошибка');
                 }
             } catch {
                 document.getElementById('admin-shop-status').textContent = '✗ Ошибка';
+            }
+        }
+
+        async function adminSaveConst(key) {
+            const div = document.querySelector(`#admin-constants-list .admin-item[data-key="${key}"]`);
+            if (!div) return;
+            const val = parseInt(div.querySelector('.admin-val').value);
+            if (isNaN(val) || val < 0) return;
+            const statusEl = document.getElementById('admin-constants-status');
+            statusEl.textContent = '⏳...';
+            try {
+                const res = await fetch('/api/admin/set-config', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json', 'x-telegram-user-id': userId },
+                    body: JSON.stringify({ category: 'constants', key, field: 'value', value: val }),
+                });
+                const d = await res.json();
+                if (d.ok) {
+                    statusEl.textContent = '✓ Сохранено';
+                    loadAllConfig();
+                } else {
+                    statusEl.textContent = '✗ ' + (d.error || 'Ошибка');
+                }
+            } catch {
+                statusEl.textContent = '✗ Ошибка';
             }
         }
 
@@ -1359,6 +1609,28 @@
                 const d = await res.json();
                 if (d.ok) {
                     status.textContent = '✓ Баланс ' + targetId + ' установлен: ' + newScore + ' 🍪';
+                } else {
+                    status.textContent = '✗ ' + (d.error || 'Ошибка');
+                }
+            } catch {
+                status.textContent = '✗ Ошибка';
+            }
+        });
+
+        document.getElementById('admin-reset-btn').addEventListener('click', async () => {
+            const targetId = document.getElementById('admin-reset-userid').value.trim();
+            const status = document.getElementById('admin-reset-status');
+            if (!targetId) { status.textContent = '✗ Укажите User ID'; return; }
+            if (!confirm('Сбросить прогресс пользователя ' + targetId + '?')) return;
+            status.textContent = '⏳...';
+            try {
+                const res = await fetch('/api/admin/user/reset', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json', 'x-telegram-user-id': userId },
+                    body: JSON.stringify({ user_id: targetId }),
+                });
+                const d = await res.json();
+                if (d.ok) {
+                    status.textContent = '✓ Прогресс ' + targetId + ' сброшен';
                 } else {
                     status.textContent = '✗ ' + (d.error || 'Ошибка');
                 }

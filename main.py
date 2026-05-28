@@ -185,6 +185,18 @@ def check_achievements(extra):
     return new_ones
 
 
+def get_effective_const():
+    cfg = load_shop_config()
+    c = cfg.get("_constants", {})
+    return {
+        "attack_cost": c.get("attack_cost", ATTACK_COST),
+        "attack_cooldown": c.get("attack_cooldown", ATTACK_COOLDOWN),
+        "prestige_score": c.get("prestige_score", PRESTIGE_SCORE),
+        "daily_bonus": c.get("daily_bonus", DAILY_BONUS),
+        "referral_bonus": c.get("referral_bonus", REFERRAL_BONUS),
+    }
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await get_pool()
@@ -225,14 +237,15 @@ async def handle_get_user(request: Request, ref: str = ""):
     if ref and not extra.get("referred_by") and ref != user_id:
         extra["referred_by"] = ref
         try:
+            ec = get_effective_const()
+            rb = ec["referral_bonus"]
             referrer = await get_user(ref)
             ref_extra = referrer.get("extra", dict(DEFAULT_EXTRA))
             ref_extra["referrals_count"] = ref_extra.get("referrals_count", 0) + 1
-            ref_score = referrer.get("score", 0)
-            if ref_score >= 100:
-                extra["referral_bonus_claimed"] = True
-                state["score"] += REFERRAL_BONUS
-            await set_user(ref, referrer["user_name"], referrer["score"], referrer["active_upgrades"],
+            referrer_score = referrer.get("score", 0) + rb
+            extra["referral_bonus_claimed"] = True
+            state["score"] += rb // 2
+            await set_user(ref, referrer["user_name"], referrer_score, referrer["active_upgrades"],
                            referrer["last_attack"], extra=ref_extra)
         except:
             pass
@@ -380,24 +393,28 @@ async def handle_attack(request: Request):
     target = await get_user(target_id)
     now = int(time.time())
 
-    if attacker["score"] < ATTACK_COST:
-        return {"ok": False, "error": f"Нужно {ATTACK_COST} 🍪 для атаки"}
+    ec = get_effective_const()
+    ac = ec["attack_cost"]
+    acd = ec["attack_cooldown"]
+
+    if attacker["score"] < ac:
+        return {"ok": False, "error": f"Нужно {ac} 🍪 для атаки"}
 
     attacker_extra = attacker.get("extra", dict(DEFAULT_EXTRA))
-    new_attacker_score = attacker["score"] - ATTACK_COST
+    new_attacker_score = attacker["score"] - ac
 
     if random.random() < 0.5:
         await set_user(attacker_id, attacker["user_name"], new_attacker_score, attacker["active_upgrades"],
                        attacker["last_attack"], extra=attacker_extra)
-        return {"ok": False, "error": "💢 Атака провалилась! Цель увернулась.", "cost": ATTACK_COST, "new_score": new_attacker_score}
+        return {"ok": False, "error": "💢 Атака провалилась! Цель увернулась.", "cost": ac, "new_score": new_attacker_score}
 
     last_attacks = dict(attacker.get("last_attack", {}))
     last_attack_time = last_attacks.get(target_id, 0)
-    if now - last_attack_time < ATTACK_COOLDOWN:
-        remaining = ATTACK_COOLDOWN - (now - last_attack_time)
+    if now - last_attack_time < acd:
+        remaining = acd - (now - last_attack_time)
         await set_user(attacker_id, attacker["user_name"], new_attacker_score, attacker["active_upgrades"],
                        attacker["last_attack"], extra=attacker_extra)
-        return {"ok": False, "error": f"Подожди {remaining // 60} мин перед атакой на этого игрока", "cost": ATTACK_COST, "new_score": new_attacker_score}
+        return {"ok": False, "error": f"Подожди {remaining // 60} мин перед атакой на этого игрока", "cost": ac, "new_score": new_attacker_score}
 
     pct = random.randint(1, 20) + attacker_extra.get("attack_bonus_pct", 0)
     active_planets = attacker_extra.get("active_planets", {})
@@ -432,16 +449,18 @@ async def handle_attack(request: Request):
                    target["last_attack"], target_notifs, extra=target_extra)
 
     return {"ok": True, "stolen": actual_stolen, "pct": pct, "broken": broken, "break_pct": break_pct,
-            "gained": gained, "safe_protected": safe_protected, "cost": ATTACK_COST, "new_score": attacker_score}
+            "gained": gained, "safe_protected": safe_protected, "cost": ac, "new_score": attacker_score}
 
 
 @app.post("/api/prestige")
 async def handle_prestige(request: Request):
     user_id = str(request.headers.get("x-telegram-user-id", "guest"))
     state = await get_user(user_id)
+    ec = get_effective_const()
+    ps = ec["prestige_score"]
 
-    if state["score"] < PRESTIGE_SCORE:
-        return {"ok": False, "error": f"Нужно {PRESTIGE_SCORE} 🍪 для престижа"}
+    if state["score"] < ps:
+        return {"ok": False, "error": f"Нужно {ps} 🍪 для престижа"}
 
     extra = state.get("extra", dict(DEFAULT_EXTRA))
     extra["prestige_bonus"] = extra.get("prestige_bonus", 0) + 1
@@ -460,6 +479,8 @@ async def handle_daily(request: Request):
     state = await get_user(user_id)
     extra = state.get("extra", dict(DEFAULT_EXTRA))
     now = int(time.time())
+    ec = get_effective_const()
+    db = ec["daily_bonus"]
 
     today = now // 86400
     last_daily = extra.get("last_daily", 0) // 86400
@@ -468,11 +489,11 @@ async def handle_daily(request: Request):
         return {"ok": False, "error": "Уже получал сегодня"}
 
     extra["last_daily"] = now
-    new_score = state["score"] + DAILY_BONUS
+    new_score = state["score"] + db
     await set_user(user_id, state["user_name"], new_score, state["active_upgrades"],
                    state["last_attack"], extra=extra)
 
-    return {"ok": True, "bonus": DAILY_BONUS, "new_score": new_score}
+    return {"ok": True, "bonus": db, "new_score": new_score}
 
 
 EVENTS = [
@@ -642,7 +663,9 @@ async def handle_fuel_buy(request: Request):
     user_id = str(request.headers.get("x-telegram-user-id", "guest"))
     body = await request.json()
     amount = max(1, body.get("amount", 1))
-    total_cost = amount * FUEL_COST
+    cfg = get_effective_prices()
+    fuel_cost = cfg["constants"]["fuel_cost"]["value"]
+    total_cost = amount * fuel_cost
 
     state = await get_user(user_id)
     if state["score"] < total_cost:
@@ -913,6 +936,154 @@ async def handle_admin_user_balance(request: Request):
         return {"ok": True, "user_id": target_id, "new_score": new_score}
     except Exception as e:
         return {"ok": False, "error": str(e)}
+
+
+@app.post("/api/admin/user/reset")
+async def handle_admin_user_reset(request: Request):
+    user_id = str(request.headers.get("x-telegram-user-id", ""))
+    if user_id != ADMIN_ID:
+        return {"ok": False, "error": "Доступ запрещён"}
+    body = await request.json()
+    target_id = str(body.get("user_id", ""))
+    if not target_id:
+        return {"ok": False, "error": "Не указан user_id"}
+    try:
+        await set_user(target_id, "", 0, {}, {}, [], dict(DEFAULT_EXTRA))
+        return {"ok": True, "user_id": target_id, "message": "Прогресс сброшен"}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+
+def get_effective_prices():
+    overrides = load_shop_config()
+    result = {}
+
+    result["upgrades"] = {}
+    for k, v in UPGRADES.items():
+        item = dict(v)
+        if k in overrides:
+            item.update(overrides[k])
+        result["upgrades"][k] = item
+
+    result["skins"] = {}
+    for k, v in SKINS.items():
+        item = dict(v)
+        sk = overrides.get("_skins", {}).get(k, {})
+        item.update(sk)
+        result["skins"][k] = item
+
+    result["star_shop"] = []
+    for item in STAR_SHOP:
+        i = dict(item)
+        sk = overrides.get("_star_shop", {}).get(item["id"], {})
+        i.update(sk)
+        result["star_shop"].append(i)
+
+    result["planets"] = {}
+    for k, v in PLANETS.items():
+        item = dict(v)
+        sk = overrides.get("_planets", {}).get(k, {})
+        item.update(sk)
+        result["planets"][k] = item
+
+    result["legendary"] = []
+    for item in LEGENDARY_UPGRADES:
+        i = dict(item)
+        sk = overrides.get("_legendary", {}).get(item["id"], {})
+        i.update(sk)
+        result["legendary"].append(i)
+
+    result["constants"] = {
+        "fuel_cost": {"value": FUEL_COST, "label": "Цена топлива (🍪)"},
+        "attack_cost": {"value": ATTACK_COST, "label": "Стоимость атаки (🍪)"},
+        "attack_cooldown": {"value": ATTACK_COOLDOWN, "label": "Кд атаки (сек)"},
+        "prestige_score": {"value": PRESTIGE_SCORE, "label": "Престиж (🍪)"},
+        "daily_bonus": {"value": DAILY_BONUS, "label": "Дневной бонус (🍪)"},
+        "referral_bonus": {"value": REFERRAL_BONUS, "label": "Бонус за реферала (🍪)"},
+    }
+    const_overrides = overrides.get("_constants", {})
+    for k in result["constants"]:
+        if k in const_overrides:
+            result["constants"][k]["value"] = const_overrides[k]
+
+    return result
+
+
+@app.get("/api/admin/all-config")
+async def handle_admin_all_config(request: Request):
+    user_id = str(request.headers.get("x-telegram-user-id", ""))
+    if user_id != ADMIN_ID:
+        return {"ok": False, "error": "Доступ запрещён"}
+    return {"ok": True, "config": get_effective_prices()}
+
+
+@app.post("/api/admin/set-config")
+async def handle_admin_set_config(request: Request):
+    user_id = str(request.headers.get("x-telegram-user-id", ""))
+    if user_id != ADMIN_ID:
+        return {"ok": False, "error": "Доступ запрещён"}
+    body = await request.json()
+    category = body.get("category", "")
+    key = body.get("key", "")
+    field = body.get("field", "")
+    value = body.get("value")
+
+    overrides = load_shop_config()
+
+    if category == "upgrades":
+        if key not in UPGRADES:
+            return {"ok": False, "error": "Неизвестный товар"}
+        if key not in overrides:
+            overrides[key] = {}
+        overrides[key][field] = value
+        save_shop_config(overrides)
+        return {"ok": True, "config": get_effective_prices()}
+
+    if category == "constants":
+        if key not in ["fuel_cost", "attack_cost", "attack_cooldown", "prestige_score", "daily_bonus", "referral_bonus"]:
+            return {"ok": False, "error": "Неизвестная константа"}
+        if "_constants" not in overrides:
+            overrides["_constants"] = {}
+        overrides["_constants"][key] = int(value)
+        save_shop_config(overrides)
+        return {"ok": True, "config": get_effective_prices()}
+
+    cat_map = {
+        "skins": ("_skins", SKINS),
+        "planets": ("_planets", PLANETS),
+    }
+    if category in cat_map:
+        cat_key, source = cat_map[category]
+        if key not in source:
+            return {"ok": False, "error": "Неизвестный ключ"}
+        if cat_key not in overrides:
+            overrides[cat_key] = {}
+        if key not in overrides[cat_key]:
+            overrides[cat_key][key] = {}
+        overrides[cat_key][key][field] = int(value)
+        save_shop_config(overrides)
+        return {"ok": True, "config": get_effective_prices()}
+
+    if category in ("star_shop", "legendary"):
+        cat_key = "_" + category
+        source = STAR_SHOP if category == "star_shop" else LEGENDARY_UPGRADES
+        item_ids = [i["id"] for i in source]
+        if key not in item_ids:
+            return {"ok": False, "error": "Неизвестный ключ"}
+        if cat_key not in overrides:
+            overrides[cat_key] = {}
+        if key not in overrides[cat_key]:
+            overrides[cat_key][key] = {}
+        overrides[cat_key][key][field] = int(value)
+        save_shop_config(overrides)
+        return {"ok": True, "config": get_effective_prices()}
+
+    return {"ok": False, "error": "Неизвестная категория"}
+
+
+@app.get("/api/shop/all")
+async def handle_shop_all():
+    return {"ok": True, "config": get_effective_prices()}
 
 
 if __name__ == "__main__":
