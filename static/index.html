@@ -1158,10 +1158,7 @@
         function renderFuelBuyHtml() {
             let html = '<div style="margin-top:16px;font-weight:700;font-size:14px">⛽ Топливо</div>';
             html += '<div class="shop-item"><div class="shop-icon" style="font-size:24px">⛽</div><div class="shop-info"><div class="shop-name">Купить топливо</div><div class="shop-desc">сейчас ' + fuel + ' ⛽</div></div>';
-            [1, 5].forEach(a => {
-                const canBuy = score >= a * 250;
-                html += '<button class="shop-btn" data-fuel-amount="' + a + '" ' + (!canBuy ? 'disabled' : '') + '>' + a + ' ⛽ · ' + (a * 250) + ' 🍪</button>';
-            });
+            html += '<button class="shop-btn" data-fuel-amount="1" ' + (score < 250 ? 'disabled' : '') + '>1 ⛽ · 250 🍪</button>';
             html += '</div>';
             return html;
         }
