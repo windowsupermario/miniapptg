@@ -452,17 +452,9 @@
             document.getElementById('event-popup').style.display = 'none';
         }
 
-        async function startServerEvent() {
-            const res = await fetch('/api/event/start', {
-                method: 'POST', headers: { 'Content-Type': 'application/json', 'x-telegram-user-id': userId },
-            });
-            const d = await res.json();
-            if (!d.ok) return;
-            if (d.shielded) {
-                showEventPopup('🛡️', 'Щит сработал!', 'Злоумышленник не прошёл');
-                Sound.event();
-                return;
-            }
+        let eventActive = false;
+
+        function showEventPopupFromData(d) {
             const popup = document.getElementById('event-popup');
             popup.innerHTML = `
                 <div class="event-popup">
@@ -475,9 +467,11 @@
             `;
             popup.style.display = 'block';
             Sound.event();
+            eventActive = true;
             popup.querySelectorAll('.choice-btn').forEach(btn => {
                 btn.addEventListener('click', async () => {
                     popup.style.display = 'none';
+                    eventActive = false;
                     const r = await fetch('/api/event/resolve', {
                         method: 'POST', headers: { 'Content-Type': 'application/json', 'x-telegram-user-id': userId },
                         body: JSON.stringify({ choice_idx: parseInt(btn.dataset.idx) }),
@@ -491,6 +485,21 @@
                     }
                 });
             });
+        }
+
+        async function startServerEvent() {
+            if (eventActive) return;
+            const res = await fetch('/api/event/start', {
+                method: 'POST', headers: { 'Content-Type': 'application/json', 'x-telegram-user-id': userId },
+            });
+            const d = await res.json();
+            if (!d.ok) return;
+            if (d.shielded) {
+                showEventPopup('🛡️', 'Щит сработал!', 'Злоумышленник не прошёл');
+                Sound.event();
+                return;
+            }
+            showEventPopupFromData(d);
         }
 
         function triggerRandomEvent() {
@@ -1028,6 +1037,9 @@
                     showNotificationPopup(n.icon, n.text);
                 }
 
+                if (d.pending_event) {
+                    showEventPopupFromData(d.pending_event);
+                }
                 checkDaily();
             } catch { renderUI(); scheduleRandomEvent(); }
         }
@@ -1148,7 +1160,7 @@
             html += '<div class="shop-item"><div class="shop-icon" style="font-size:24px">⛽</div><div class="shop-info"><div class="shop-name">Купить топливо</div><div class="shop-desc">сейчас ' + fuel + ' ⛽</div></div>';
             [1, 5].forEach(a => {
                 const canBuy = score >= a * 250;
-                html += '<button class="shop-btn" data-fuel-amount="' + a + '" ' + (!canBuy ? 'disabled' : '') + '>' + (a * 250) + ' 🍪</button>';
+                html += '<button class="shop-btn" data-fuel-amount="' + a + '" ' + (!canBuy ? 'disabled' : '') + '>' + a + ' ⛽ · ' + (a * 250) + ' 🍪</button>';
             });
             html += '</div>';
             return html;

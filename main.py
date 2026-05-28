@@ -246,13 +246,20 @@ async def handle_get_user(request: Request, ref: str = ""):
         extra["start_bonus"] = 0
 
     pending = extra.get("pending_event")
+    pending_event_info = None
     if pending and isinstance(pending, dict):
         elapsed = int(time.time()) - pending.get("time", 0)
         if elapsed > PENDING_EVENT_TIMEOUT:
-            score_before = state["score"]
-            new_score, _ = apply_event(score_before, pending["type"], random.randint(0, 1))
+            new_score, _ = apply_event(state["score"], pending["type"], random.randint(0, 1))
             state["score"] = new_score
             extra["pending_event"] = None
+        else:
+            evt = EVENTS[pending["type"]]
+            pending_event_info = {
+                "icon": evt["icon"],
+                "text": evt["text"],
+                "choices": [c["text"] for c in evt["choices"]],
+            }
 
     calc_energy(extra)
 
@@ -285,6 +292,7 @@ async def handle_get_user(request: Request, ref: str = ""):
         "fuel": extra.get("fuel", 0),
         "active_planets": active_planets,
         "planets_boost": planets_boost,
+        "pending_event": pending_event_info,
     }
 
 
