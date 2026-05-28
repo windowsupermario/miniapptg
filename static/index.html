@@ -203,7 +203,6 @@
             width: 36px; height: 36px; display: none; align-items: center; justify-content: center;
             font-size: 13px; font-weight: 800; box-shadow: 0 2px 8px rgba(0,0,0,0.3);
         }
-        .toggle-wrap { display: flex; align-items: center; gap: 10px; padding: 10px 0; }
         .toggle {
             width: 44px; height: 24px; border-radius: 12px; background: #ccc; cursor: pointer;
             position: relative; transition: background 0.2s; border: none; flex-shrink: 0;
@@ -225,8 +224,6 @@
             color: var(--tg-theme-text-color, #000); resize: vertical; min-height: 60px;
             font-family: inherit; box-sizing: border-box;
         }
-        .admin-section textarea:focus { outline: none; border-color: #9c27b0; }
-        .admin-actions { display: flex; gap: 8px; margin-top: 8px; }
         .admin-btn {
             padding: 10px 20px; border: none; border-radius: 10px; font-size: 14px;
             font-weight: 600; cursor: pointer; color: #fff; flex: 1;
@@ -234,7 +231,6 @@
         .admin-btn.send { background: var(--tg-theme-button-color, #2481cc); }
         .admin-btn.clear { background: #f44336; }
         .admin-btn:disabled { opacity: 0.5; cursor: default; }
-        .admin-status { margin-top: 8px; font-size: 12px; color: var(--tg-theme-hint-color, #888); }
         .admin-item {
             padding: 10px; margin-bottom: 8px;
             background: var(--tg-theme-secondary-bg-color, #f0f0f0);
@@ -250,25 +246,6 @@
             color: #fff; font-size: 12px; font-weight: 600; cursor: pointer;
         }
 
-        .notif-banner {
-            position: fixed; bottom: 0; left: 0; right: 0;
-            padding: 12px 44px 12px 16px; z-index: 100;
-            background: var(--tg-theme-secondary-bg-color, #f0f0f0);
-            font-size: 13px; line-height: 1.4;
-            box-shadow: 0 -2px 12px rgba(0,0,0,0.12);
-            display: none; animation: slideUp 0.3s ease-out;
-        }
-        @keyframes slideUp {
-            0% { transform: translateY(100%); }
-            100% { transform: translateY(0); }
-        }
-        .notif-banner .notif-close {
-            position: absolute; right: 8px; top: 8px;
-            border: none; background: none; font-size: 18px;
-            cursor: pointer; color: var(--tg-theme-hint-color, #888);
-            padding: 4px; line-height: 1;
-        }
-        .notif-banner .notif-close:hover { color: var(--tg-theme-text-color, #000); }
     </style>
 </head>
 <body>
@@ -331,17 +308,7 @@
     </div>
 
     <div class="page" id="page-admin">
-        <div class="admin-section">
-            <label>📢 Глобальное уведомление для всех игроков</label>
-            <textarea id="admin-notif-input" placeholder="Введите текст уведомления..."></textarea>
-            <div class="admin-actions">
-                <button class="admin-btn send" id="admin-send-btn">Отправить</button>
-                <button class="admin-btn clear" id="admin-clear-btn">Очистить</button>
-            </div>
-            <div class="admin-status" id="admin-status"></div>
-        </div>
-
-        <div class="admin-section" style="margin-top:16px">
+        <div class="admin-section" style="margin-top:0">
             <label>💰 Баланс пользователя</label>
             <div style="display:flex;gap:8px;flex-wrap:wrap;padding:10px;background:var(--tg-theme-secondary-bg-color,#f0f0f0);border-radius:10px;margin-top:6px">
                 <input type="text" id="admin-balance-userid" placeholder="User ID" style="padding:8px;border-radius:8px;border:1px solid #ccc;font-size:13px;flex:1;min-width:100px">
@@ -354,16 +321,12 @@
         <div class="admin-section" style="margin-top:16px">
             <label>🏪 Цены магазина</label>
             <div id="admin-shop-list" style="margin-top:6px"></div>
+            <div style="margin-top:8px;font-size:12px;color:var(--tg-theme-hint-color,#888)" id="admin-shop-status"></div>
         </div>
     </div>
 
     <div id="golden-cookie" class="golden-cookie">🌟</div>
     <div id="event-popup" style="display:none"></div>
-    <div class="notif-banner" id="notif-banner">
-        <span id="notif-banner-text"></span>
-        <button class="notif-close" id="notif-banner-close">✕</button>
-    </div>
-
     <script>
         const tg = window.Telegram?.WebApp;
         if (tg) { tg.expand(); tg.ready(); }
@@ -1189,7 +1152,6 @@
         function renderStats() {
             const e = extra;
             const earnedAch = (e.achievements || []).length;
-            const notifOn = e.notifications_enabled !== false;
             let html = `
                 <div style="font-weight:700;font-size:14px;margin-bottom:8px">👤 Профиль</div>
                 <div class="shop-item"><span class="shop-icon">🍪</span><div class="shop-info"><div class="shop-name">${score}</div><div class="shop-desc">Текущий счёт</div></div></div>
@@ -1201,10 +1163,6 @@
                 <div class="shop-item"><span class="shop-icon">🏆</span><div class="shop-info"><div class="shop-name">${earnedAch} / ${totalAchCount}</div><div class="shop-desc">Достижений</div></div></div>
                 <div class="shop-item"><span class="shop-icon">🎨</span><div class="shop-info"><div class="shop-name">${ownedSkins.length}</div><div class="shop-desc">Скинов в коллекции</div></div></div>
                 <div class="shop-item"><span class="shop-icon">🔗</span><div class="shop-info"><div class="shop-name" id="ref-link" style="font-size:12px;word-break:break-all">Загрузка...</div><div class="shop-desc">Реферальная ссылка (приведи друга → +100 🍪)</div></div><button class="shop-btn" id="ref-copy-btn" onclick="copyRefLink(this)">Копировать</button></div>
-                <div class="toggle-wrap">
-                    <button class="toggle ${notifOn ? 'on' : ''}" id="notif-toggle" onclick="toggleNotifications()"></button>
-                    <span style="font-size:13px">Уведомления в Telegram ${notifOn ? 'вкл' : 'выкл'}</span>
-                </div>
                 <div style="font-weight:700;font-size:14px;margin:12px 0 8px">🎯 Достижения</div>
                 <div id="ach-list"></div>
             `;
@@ -1213,17 +1171,6 @@
             fetch('/api/referral', { headers: { 'x-telegram-user-id': userId } }).then(r => r.json()).then(d => {
                 document.getElementById('ref-link').textContent = d.referral_link || '';
             });
-        }
-
-        async function toggleNotifications() {
-            const res = await fetch('/api/notifications/toggle', {
-                method: 'POST', headers: { 'Content-Type': 'application/json', 'x-telegram-user-id': userId },
-            });
-            const d = await res.json();
-            if (d.ok) {
-                extra.notifications_enabled = d.notifications_enabled;
-                renderStats();
-            }
         }
 
         function renderFuelBuyHtml() {
@@ -1358,11 +1305,6 @@
         }
 
         async function loadAdminPage() {
-            try {
-                const res = await fetch('/api/admin/notification');
-                const d = await res.json();
-                document.getElementById('admin-notif-input').value = d.text || '';
-            } catch {}
             renderAdminShop();
         }
 
@@ -1399,11 +1341,11 @@
             const cost = parseInt(costInput.value);
             const duration = parseInt(durInput.value);
             if (isNaN(cost) || cost < 0) {
-                document.getElementById('admin-status').textContent = '✗ Некорректная цена';
+                document.getElementById('admin-shop-status').textContent = '✗ Некорректная цена';
                 return;
             }
             if (isNaN(duration) || duration < 10) {
-                document.getElementById('admin-status').textContent = '✗ Длительность минимум 10 сек';
+                document.getElementById('admin-shop-status').textContent = '✗ Длительность минимум 10 сек';
                 return;
             }
             try {
@@ -1413,14 +1355,14 @@
                 });
                 const d = await res.json();
                 if (d.ok) {
-                    document.getElementById('admin-status').textContent = '✓ Цена обновлена';
+                    document.getElementById('admin-shop-status').textContent = '✓ Цена обновлена';
                     await loadShopPrices();
                     renderAdminShop();
                 } else {
-                    document.getElementById('admin-status').textContent = '✗ ' + (d.error || 'Ошибка');
+                    document.getElementById('admin-shop-status').textContent = '✗ ' + (d.error || 'Ошибка');
                 }
             } catch {
-                document.getElementById('admin-status').textContent = '✗ Ошибка';
+                document.getElementById('admin-shop-status').textContent = '✗ Ошибка';
             }
         }
 
@@ -1446,67 +1388,7 @@
             }
         });
 
-        document.getElementById('admin-send-btn').addEventListener('click', async () => {
-            const text = document.getElementById('admin-notif-input').value.trim();
-            const status = document.getElementById('admin-status');
-            if (!text) { status.textContent = '✗ Введите текст'; return; }
-            status.textContent = '⏳ Отправка...';
-            const res = await fetch('/api/admin/notification', {
-                method: 'POST', headers: { 'Content-Type': 'application/json', 'x-telegram-user-id': userId },
-                body: JSON.stringify({ text }),
-            });
-            const d = await res.json();
-            if (d.ok) {
-                status.textContent = '✓ Уведомление отправлено';
-                localStorage.removeItem('dismissed_notif_id');
-                showNotificationBanner(text, d.id);
-            } else {
-                status.textContent = '✗ ' + (d.error || 'Ошибка');
-            }
-        });
-
-        document.getElementById('admin-clear-btn').addEventListener('click', async () => {
-            const status = document.getElementById('admin-status');
-            status.textContent = '⏳ Очистка...';
-            const res = await fetch('/api/admin/notification', {
-                method: 'POST', headers: { 'Content-Type': 'application/json', 'x-telegram-user-id': userId },
-                body: JSON.stringify({ text: '' }),
-            });
-            const d = await res.json();
-            if (d.ok) {
-                status.textContent = '✓ Уведомление удалено';
-                document.getElementById('admin-notif-input').value = '';
-                document.getElementById('notif-banner').style.display = 'none';
-                localStorage.removeItem('dismissed_notif_id');
-            } else {
-                status.textContent = '✗ ' + (d.error || 'Ошибка');
-            }
-        });
-
-        async function fetchAndShowNotification() {
-            try {
-                const res = await fetch('/api/admin/notification');
-                const d = await res.json();
-                if (d.text && d.text.trim()) {
-                    const dismissed = localStorage.getItem('dismissed_notif_id');
-                    if (dismissed == d.id) return;
-                    showNotificationBanner(d.text, d.id);
-                }
-            } catch {}
-        }
-
-        function showNotificationBanner(text, id) {
-            const banner = document.getElementById('notif-banner');
-            document.getElementById('notif-banner-text').textContent = text;
-            banner.style.display = 'block';
-            document.getElementById('notif-banner-close').onclick = () => {
-                banner.style.display = 'none';
-                if (id) localStorage.setItem('dismissed_notif_id', id);
-            };
-        }
-
         loadUser();
-        fetchAndShowNotification();
     </script>
 </body>
 </html>

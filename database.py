@@ -13,7 +13,6 @@ DEFAULT_EXTRA = {
     "current_skin": "default",
     "owned_skins": ["default"],
     "stars": 0,
-    "notifications_enabled": True,
     "referrals_count": 0,
     "fuel": 0,
     "energy": 10,

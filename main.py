@@ -94,21 +94,6 @@ PLANETS = {
 FUEL_COST = 250
 
 ADMIN_ID = "7153815329"
-NOTIFICATION_FILE = Path(__file__).parent / "admin_notification.json"
-
-
-def load_notification():
-    try:
-        return json.loads(NOTIFICATION_FILE.read_text())
-    except:
-        return {"text": "", "id": 0}
-
-
-def save_notification(text: str):
-    data = {"text": text, "id": int(time.time())}
-    NOTIFICATION_FILE.write_text(json.dumps(data))
-    return data
-
 
 STAR_SHOP = [
     {"id": "perm_click",  "name": "👆 +1 к клику навсегда",  "cost": 5,  "effect": lambda e: e.update({"prestige_bonus": e.get("prestige_bonus", 0) + 1})},
@@ -495,16 +480,6 @@ async def handle_star_buy(request: Request):
     return {"ok": True, "stars": extra["stars"], "extra": extra}
 
 
-@app.post("/api/notifications/toggle")
-async def handle_notifications_toggle(request: Request):
-    user_id = str(request.headers.get("x-telegram-user-id", "guest"))
-    state = await get_user(user_id)
-    extra = state.get("extra", dict(DEFAULT_EXTRA))
-    extra["notifications_enabled"] = not extra.get("notifications_enabled", True)
-    await set_user(user_id, state["user_name"], state["score"], state["active_upgrades"],
-                   state["last_attack"], extra=extra)
-    return {"ok": True, "notifications_enabled": extra["notifications_enabled"]}
-
 
 @app.get("/api/star/shop")
 async def handle_star_shop():
@@ -698,21 +673,6 @@ async def handle_legend_buy(request: Request):
                    state["last_attack"], extra=extra)
     return {"ok": True, "score": new_score, "extra": extra}
 
-
-@app.get("/api/admin/notification")
-async def handle_get_admin_notification():
-    return load_notification()
-
-
-@app.post("/api/admin/notification")
-async def handle_set_admin_notification(request: Request):
-    user_id = str(request.headers.get("x-telegram-user-id", ""))
-    if user_id != ADMIN_ID:
-        return {"ok": False, "error": "Доступ запрещён"}
-    body = await request.json()
-    text = body.get("text", "")
-    data = save_notification(text)
-    return {"ok": True, **data}
 
 
 SHOP_CONFIG_FILE = Path(__file__).parent / "shop_config.json"
