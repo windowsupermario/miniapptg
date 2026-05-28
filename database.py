@@ -25,6 +25,7 @@ DEFAULT_EXTRA = {
     "active_planets": {},
     "legendary_bought": [],
     "referred_by": "",
+    "last_golden_time": 0,
 }
 
 if DATABASE_URL:

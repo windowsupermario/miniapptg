@@ -374,7 +374,7 @@
         let activeUpgrades = {}, extra = {}, currentSkin = 'default', ownedSkins = ['default'];
         let saveTimer = null, autoTimer = null, shieldTimer = null, eventTimer = null;
         let recalcTimer = null, goldenTimer = null, comboResets = null;
-        let combo = 0, lastClickTime = 0, clicksSinceSave = 0;
+        let combo = 0, lastClickTime = 0, clicksSinceSave = 0, autoClicksSinceSave = 0;
         let shopPrices = null;
         let goldenEnabled = false;
         let glowActive = false, glowTimer = null;
@@ -730,7 +730,9 @@
         function renderCombo() {
             const el = document.getElementById('combo');
             if (combo > 1) {
-                el.textContent = '🔥 x' + combo + ' комбо!';
+                const effective = Math.min(combo, 5);
+                const mult = 1 + effective * 0.1;
+                el.textContent = '🔥 x' + combo + ' комбо (x' + mult.toFixed(1) + ')';
                 el.style.color = '#ff9800';
             } else {
                 el.textContent = '';
@@ -781,18 +783,25 @@
             } catch { shopPrices = {}; }
         }
 
+        function fmtDuration(secs) {
+            const m = Math.floor(secs / 60);
+            const s = secs % 60;
+            return m > 0 ? m + ' мин' + (s ? ' ' + s + ' сек' : '') : s + ' сек';
+        }
+
         function renderShop() {
             const defs = [
-                { key: 'click_bonus_1', icon: '🖊️', name: 'Лучшая ручка',    desc: '+1 к клику · 5 мин',     cost: 500 },
-                { key: 'click_bonus_3', icon: '🦾', name: 'Механическая рука', desc: '+3 к клику · 8 мин',     cost: 2500, req: 'click_bonus_1' },
-                { key: 'click_bonus_7', icon: '🤖', name: 'Робот-кликер',     desc: '+7 к клику · 15 мин',    cost: 10000, req: 'click_bonus_3' },
-                { key: 'auto_clicker',  icon: '⚡', name: 'Автокликер',       desc: '+1 🍪/2 сек · 5 мин',    cost: 4000 },
-                { key: 'shield',        icon: '🛡️', name: 'Щит',             desc: 'Защита от событий · 5 мин', cost: 2500 },
-                { key: 'safe',          icon: '🔒', name: 'Сейф',             desc: '30% печенек в сохранности при атаке · 5 мин', cost: 5000 },
+                { key: 'click_bonus_1', icon: '🖊️', name: 'Лучшая ручка',    descTmpl: '+1 к клику · {dur}',   cost: 500, defaultDur: 300 },
+                { key: 'click_bonus_3', icon: '🦾', name: 'Механическая рука', descTmpl: '+3 к клику · {dur}',   cost: 2500, defaultDur: 480, req: 'click_bonus_1' },
+                { key: 'click_bonus_7', icon: '🤖', name: 'Робот-кликер',     descTmpl: '+7 к клику · {dur}',   cost: 10000, defaultDur: 900, req: 'click_bonus_3' },
+                { key: 'auto_clicker',  icon: '⚡', name: 'Автокликер',       descTmpl: '+1 🍪/2 сек · {dur}',  cost: 4000, defaultDur: 300 },
+                { key: 'shield',        icon: '🛡️', name: 'Щит',             descTmpl: 'Защита от событий · {dur}', cost: 2500, defaultDur: 300 },
+                { key: 'safe',          icon: '🔒', name: 'Сейф',             descTmpl: '30% печенек в сохранности при атаке · {dur}', cost: 5000, defaultDur: 300 },
             ];
             const allUpgrades = defs.map(u => {
                 const server = shopPrices && shopPrices[u.key];
-                return { ...u, cost: server ? server.cost : u.cost, duration: server ? server.duration : undefined };
+                const dur = server ? server.duration : u.defaultDur;
+                return { ...u, cost: server ? server.cost : u.cost, duration: dur, desc: u.descTmpl.replace('{dur}', fmtDuration(dur)) };
             });
             const now = Math.floor(Date.now() / 1000);
             const el = document.getElementById('shop-list');
@@ -802,7 +811,7 @@
                 const hasReq = !u.req || (activeUpgrades[u.req] && activeUpgrades[u.req] > now);
                 const canBuy = score >= u.cost && !isActive && hasReq;
                 const timeLeft = isActive ? timeStr(expiry) : '';
-                let btnText = 'Купить';
+                let btnText = u.cost + ' 🍪';
                 let btnClass = '';
                 if (isActive) { btnText = '✓'; btnClass = 'bought'; }
                 else if (!hasReq) { btnText = '🔒'; btnClass = 'locked'; }
@@ -811,7 +820,7 @@
                         <div class="shop-icon">${u.icon}</div>
                         <div class="shop-info">
                             <div class="shop-name">${u.name}</div>
-                            <div class="shop-desc">${u.desc} · ${u.cost} 🍪${timeLeft ? ' · ⏱ ' + timeLeft : ''}</div>
+                            <div class="shop-desc">${u.desc}${timeLeft ? ' · ⏱ ' + timeLeft : ''}</div>
                         </div>
                         <button class="shop-btn ${btnClass}" data-key="${u.key}" ${!canBuy && !isActive ? 'disabled' : ''}>
                             ${btnText}
@@ -1007,6 +1016,7 @@
                 if (energy <= 0) return;
                 score += autoClicker;
                 energy = Math.max(0, energy - 1);
+                autoClicksSinceSave++;
                 renderUI(); scheduleSave();
                 cookie.style.transform = 'scale(0.95)';
                 cookie.style.boxShadow = '0 2px 8px rgba(0,0,0,0.2), inset 0 -2px 4px rgba(0,0,0,0.1)';
@@ -1027,7 +1037,7 @@
                 const res = await fetch('/api/user', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', 'x-telegram-user-id': userId },
-                    body: JSON.stringify({ user_name: userName, score, clicks_since_save: clicksSinceSave }),
+                    body: JSON.stringify({ user_name: userName, score, clicks_since_save: clicksSinceSave, auto_clicks_since_save: autoClicksSinceSave }),
                 });
                 const d = await res.json();
                 if (d.ok !== false) {
@@ -1039,7 +1049,7 @@
                         setTimeout(() => document.getElementById('status').textContent = '✓ Сохранено', 3000);
                     }
                 }
-                clicksSinceSave = 0;
+                clicksSinceSave = 0; autoClicksSinceSave = 0;
                 if (!(d && d.decayed)) document.getElementById('status').textContent = '✓ Сохранено';
             } catch { document.getElementById('status').textContent = '✗ Ошибка'; }
         }
@@ -1057,8 +1067,8 @@
                 extra = d.extra || {};
                 currentSkin = extra.current_skin || 'default';
                 ownedSkins = extra.owned_skins || ['default'];
-                energy = d.energy || 100;
-                maxEnergy = d.max_energy || 100;
+                energy = d.energy !== undefined ? d.energy : 10;
+                maxEnergy = d.max_energy !== undefined ? d.max_energy : 10;
                 fuel = d.fuel || 0;
                 activePlanets = d.active_planets || {};
                 planetsBoost = d.planets_boost || {};
@@ -1174,9 +1184,10 @@
             }
         }
 
+        let totalAchCount = 0;
+
         function renderStats() {
             const e = extra;
-            const totalAch = 19;
             const earnedAch = (e.achievements || []).length;
             const notifOn = e.notifications_enabled !== false;
             let html = `
@@ -1187,7 +1198,7 @@
                 <div class="shop-item"><span class="shop-icon">🔥</span><div class="shop-info"><div class="shop-name">${e.prestige_bonus || 0}</div><div class="shop-desc">Престиж</div></div></div>
                 <div class="shop-item"><span class="shop-icon">👆</span><div class="shop-info"><div class="shop-name">${e.total_clicks || 0}</div><div class="shop-desc">Всего кликов</div></div></div>
                 <div class="shop-item"><span class="shop-icon">💢</span><div class="shop-info"><div class="shop-name">${e.total_attacks || 0}</div><div class="shop-desc">Атак совершено</div></div></div>
-                <div class="shop-item"><span class="shop-icon">🏆</span><div class="shop-info"><div class="shop-name">${earnedAch} / ${totalAch}</div><div class="shop-desc">Достижений</div></div></div>
+                <div class="shop-item"><span class="shop-icon">🏆</span><div class="shop-info"><div class="shop-name">${earnedAch} / ${totalAchCount}</div><div class="shop-desc">Достижений</div></div></div>
                 <div class="shop-item"><span class="shop-icon">🎨</span><div class="shop-info"><div class="shop-name">${ownedSkins.length}</div><div class="shop-desc">Скинов в коллекции</div></div></div>
                 <div class="shop-item"><span class="shop-icon">🔗</span><div class="shop-info"><div class="shop-name" id="ref-link" style="font-size:12px;word-break:break-all">Загрузка...</div><div class="shop-desc">Реферальная ссылка (приведи друга → +100 🍪)</div></div><button class="shop-btn" id="ref-copy-btn" onclick="copyRefLink(this)">Копировать</button></div>
                 <div class="toggle-wrap">
@@ -1270,6 +1281,7 @@
             const earned = new Set(extra.achievements || []);
             const el = document.getElementById('ach-list');
             if (!el) return;
+            totalAchCount = list.length;
             el.innerHTML = list.map(a => {
                 const done = earned.has(a.id);
                 return '<div class="ach-entry"><div class="ach-icon">' + a.icon + '</div><div class="ach-info"><div class="ach-name">' + a.name + '</div><div class="ach-desc">' + a.desc + '</div></div><div class="ach-status ' + (done ? 'ach-done' : 'ach-locked') + '">' + (done ? '✓' : '★') + '</div></div>';
@@ -1382,8 +1394,18 @@
         async function adminSaveShopPrice(key) {
             const div = document.querySelector(`.admin-item[data-key="${key}"]`);
             if (!div) return;
-            const cost = parseInt(div.querySelector('.admin-shop-cost').value) || 0;
-            const duration = parseInt(div.querySelector('.admin-shop-dur').value) || 300;
+            const costInput = div.querySelector('.admin-shop-cost');
+            const durInput = div.querySelector('.admin-shop-dur');
+            const cost = parseInt(costInput.value);
+            const duration = parseInt(durInput.value);
+            if (isNaN(cost) || cost < 0) {
+                document.getElementById('admin-status').textContent = '✗ Некорректная цена';
+                return;
+            }
+            if (isNaN(duration) || duration < 10) {
+                document.getElementById('admin-status').textContent = '✗ Длительность минимум 10 сек';
+                return;
+            }
             try {
                 const res = await fetch('/api/admin/shop/price', {
                     method: 'POST', headers: { 'Content-Type': 'application/json', 'x-telegram-user-id': userId },
@@ -1392,6 +1414,8 @@
                 const d = await res.json();
                 if (d.ok) {
                     document.getElementById('admin-status').textContent = '✓ Цена обновлена';
+                    await loadShopPrices();
+                    renderAdminShop();
                 } else {
                     document.getElementById('admin-status').textContent = '✗ ' + (d.error || 'Ошибка');
                 }

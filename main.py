@@ -44,6 +44,8 @@ GOLDEN_REWARDS = [
     {"type": "boost",   "value": 1,   "icon": "⚡", "text": "x2 клика на 30 сек", "boost_key": "golden_boost", "boost_duration": 30},
 ]
 
+GOLDEN_COOLDOWN = 25  # минимальный интервал между золотыми печеньками (сек)
+
 SKINS = {
     "default": {"name": "Классическая",  "cost": 0,     "gradient": "radial-gradient(circle at 35% 35%, #f5d68a, #c8943c)", "chips": "#6b4226"},
     "choco":   {"name": "Шоколадная",    "cost": 2500,  "gradient": "radial-gradient(circle at 35% 35%, #8d6e4a, #4a2c1a)", "chips": "#2d1a0a"},
@@ -253,6 +255,11 @@ async def handle_get_user(request: Request, ref: str = ""):
     decayed_score = apply_decay(state, extra)
     state["score"] = decayed_score
 
+    start_bonus = extra.get("start_bonus", 0)
+    if start_bonus > 0:
+        state["score"] += start_bonus
+        extra["start_bonus"] = 0
+
     calc_energy(extra)
 
     planets_boost, active_planets = calc_planets_bonus(extra.get("active_planets", {}))
@@ -295,7 +302,8 @@ async def handle_update_user(request: Request):
     extra = state.get("extra", dict(DEFAULT_EXTRA))
     new_extra = {**extra}
     clicks = body.get("clicks_since_save", 0)
-    new_extra["total_clicks"] = new_extra.get("total_clicks", 0) + clicks
+    auto_clicks = body.get("auto_clicks_since_save", 0)
+    new_extra["total_clicks"] = new_extra.get("total_clicks", 0) + clicks + auto_clicks
     new_extra["highest_score"] = max(new_extra.get("highest_score", 0), body.get("score", 0))
 
     new_score = body.get("score", 0)
@@ -305,7 +313,7 @@ async def handle_update_user(request: Request):
 
     max_e = new_extra.get("max_energy", MAX_ENERGY)
     energy = calc_energy(new_extra)
-    energy = max(0, energy - clicks * ENERGY_PER_CLICK)
+    energy = max(0, energy - (clicks + auto_clicks) * ENERGY_PER_CLICK)
     new_extra["energy"] = energy
 
     await set_user(
@@ -532,11 +540,18 @@ async def handle_golden(request: Request):
     if reward_idx < 0 or reward_idx >= len(GOLDEN_REWARDS):
         return {"ok": False, "error": "Неверная награда"}
 
-    reward = GOLDEN_REWARDS[reward_idx]
     state = await get_user(user_id)
-    active_upgrades = dict(state.get("active_upgrades", {}))
     extra = state.get("extra", dict(DEFAULT_EXTRA))
+    now = int(time.time())
+
+    last_golden = extra.get("last_golden_time", 0)
+    if now - last_golden < GOLDEN_COOLDOWN:
+        return {"ok": False, "error": "Слишком часто"}
+
+    reward = GOLDEN_REWARDS[reward_idx]
+    active_upgrades = dict(state.get("active_upgrades", {}))
     new_score = state["score"]
+    extra["last_golden_time"] = now
 
     if reward["type"] == "cookies":
         new_score += reward["value"]
@@ -748,17 +763,26 @@ async def handle_admin_set_price(request: Request):
     key = body.get("key", "")
     if key not in UPGRADES:
         return {"ok": False, "error": "Неизвестный товар"}
-    overrides = load_shop_config()
-    if key not in overrides:
-        overrides[key] = {}
-    if "cost" in body:
-        overrides[key]["cost"] = int(body["cost"])
-    if "name" in body:
-        overrides[key]["name"] = str(body["name"])
-    if "duration" in body:
-        overrides[key]["duration"] = int(body["duration"])
-    save_shop_config(overrides)
-    return {"ok": True, "upgrades": merge_shop_overrides(overrides)}
+    try:
+        overrides = load_shop_config()
+        if key not in overrides:
+            overrides[key] = {}
+        if "cost" in body:
+            cost = int(body["cost"])
+            if cost < 0:
+                return {"ok": False, "error": "Цена не может быть отрицательной"}
+            overrides[key]["cost"] = cost
+        if "name" in body:
+            overrides[key]["name"] = str(body["name"])
+        if "duration" in body:
+            duration = int(body["duration"])
+            if duration < 10:
+                return {"ok": False, "error": "Длительность минимум 10 секунд"}
+            overrides[key]["duration"] = duration
+        save_shop_config(overrides)
+        return {"ok": True, "upgrades": merge_shop_overrides(overrides)}
+    except (ValueError, TypeError):
+        return {"ok": False, "error": "Некорректное значение"}
 
 
 @app.post("/api/admin/user/balance")
