@@ -165,10 +165,13 @@ def calc_planets_bonus(active_planets):
     now = int(time.time())
     active_planets = {k: v for k, v in active_planets.items() if v > now}
     boost = {}
+    overrides = load_shop_config().get("_planets", {})
     for planet_key, expiry in active_planets.items():
         planet = PLANETS.get(planet_key)
         if planet:
-            boost[planet["effect"]] = max(boost.get(planet["effect"], 0), planet["value"])
+            item = dict(planet)
+            item.update(overrides.get(planet_key, {}))
+            boost[item["effect"]] = max(boost.get(item["effect"], 0), item["value"])
     return boost, active_planets
 
 

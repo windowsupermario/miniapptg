@@ -1453,8 +1453,12 @@
                         </div>
                         <div style="display:flex;gap:8px;margin-top:6px;align-items:center;flex-wrap:wrap">
                             <span style="font-size:12px">⛽:</span>
-                            <input type="number" class="admin-val" value="${p.fuel_cost}" style="width:80px">
-                            <button class="save-btn" onclick="adminSaveConfig('planets','${key}','fuel_cost')">💾</button>
+                            <input type="number" class="admin-val" data-field="fuel_cost" value="${p.fuel_cost}" style="width:60px">
+                            <span style="font-size:12px">Бонус:</span>
+                            <input type="number" class="admin-val" data-field="value" value="${p.value}" style="width:60px">
+                            <span style="font-size:12px">Длит.(с):</span>
+                            <input type="number" class="admin-val" data-field="duration" value="${p.duration}" style="width:70px">
+                            <button class="save-btn" onclick="adminSavePlanet('${key}')">💾</button>
                         </div>
                     </div>
                 `).join('');
@@ -1590,6 +1594,35 @@
                 } else {
                     statusEl.textContent = '✗ ' + (d.error || 'Ошибка');
                 }
+            } catch {
+                statusEl.textContent = '✗ Ошибка';
+            }
+        }
+
+        async function adminSavePlanet(key) {
+            const div = document.querySelector(`#admin-planets-list .admin-item[data-key="${key}"]`);
+            if (!div) return;
+            const vals = {};
+            div.querySelectorAll('.admin-val').forEach(inp => {
+                vals[inp.dataset.field] = parseInt(inp.value);
+            });
+            if (Object.values(vals).some(v => isNaN(v) || v < 0)) {
+                document.getElementById('admin-planets-status').textContent = '✗ Некорректное значение';
+                return;
+            }
+            const statusEl = document.getElementById('admin-planets-status');
+            statusEl.textContent = '⏳...';
+            try {
+                for (const [field, value] of Object.entries(vals)) {
+                    const res = await fetch('/api/admin/set-config', {
+                        method: 'POST', headers: { 'Content-Type': 'application/json', 'x-telegram-user-id': userId },
+                        body: JSON.stringify({ category: 'planets', key, field, value }),
+                    });
+                    const d = await res.json();
+                    if (!d.ok) { statusEl.textContent = '✗ ' + (d.error || 'Ошибка'); return; }
+                }
+                statusEl.textContent = '✓ Сохранено';
+                loadAllConfig(); renderAdminPlanets();
             } catch {
                 statusEl.textContent = '✗ Ошибка';
             }
