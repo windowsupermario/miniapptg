@@ -458,6 +458,104 @@ async def handle_daily(request: Request):
     return {"ok": True, "bonus": DAILY_BONUS, "new_score": new_score}
 
 
+EVENTS = [
+    {  # 0: Raccoon
+        "icon": "🦝", "text": "Вор лезет в кладовую!",
+        "choices": [
+            {"text": "Откупиться 50 🍪"},
+            {"text": "Рискнуть!"},
+        ]
+    },
+    {  # 1: Mice
+        "icon": "🐭", "text": "Мыши в кладовке!",
+        "choices": [
+            {"text": "Купить ловушку 30 🍪"},
+            {"text": "Игнорировать"},
+        ]
+    },
+    {  # 2: Cookie crumble
+        "icon": "💔", "text": "Печенье рассыпалось!",
+        "choices": [
+            {"text": "Попробовать собрать"},
+            {"text": "Выбросить и забыть"},
+        ]
+    },
+]
+
+
+@app.post("/api/event/resolve")
+async def handle_event_resolve(request: Request):
+    user_id = str(request.headers.get("x-telegram-user-id", "guest"))
+    body = await request.json()
+    event_type = body.get("event_type", 0)
+    choice_idx = body.get("choice_idx", 0)
+
+    if event_type < 0 or event_type >= len(EVENTS):
+        return {"ok": False, "error": "Неизвестное событие"}
+    if choice_idx < 0 or choice_idx > 1:
+        return {"ok": False, "error": "Неверный выбор"}
+
+    state = await get_user(user_id)
+    score = state["score"]
+    if score <= 50:
+        return {"ok": False, "error": "Слишком мало печенек"}
+    result_text = ""
+
+    if event_type == 0:  # Raccoon
+        if choice_idx == 0:
+            cost = min(50, score)
+            score -= cost
+            if random.random() < 0.5:
+                result_text = f"Вор ушёл за {cost} 🍪"
+            else:
+                extra = min(30, score)
+                score -= extra
+                result_text = f"Вор не ушёл -{cost + extra} 🍪"
+        else:
+            if random.random() < 0.5:
+                score = max(0, score - 100)
+                result_text = "-100 🍪"
+            else:
+                result_text = "Устоял! 👍"
+
+    elif event_type == 1:  # Mice
+        if choice_idx == 0:
+            cost = min(30, score)
+            score -= cost
+            if random.random() < 0.5:
+                result_text = f"Ловушка сработала за {cost} 🍪"
+            else:
+                loss = min(score, max(1, score // 10))
+                score -= loss
+                result_text = f"Ловушка пуста -{cost + loss} 🍪"
+        else:
+            loss = min(score, max(1, score // 10))
+            score -= loss
+            result_text = f"-{loss} 🍪"
+
+    else:  # Cookie crumble
+        would_lose = max(1, min(score, score * 15 // 100))
+        if choice_idx == 0:
+            if random.random() < 0.5:
+                saved_pct = 0.1 + random.random() * 0.6
+                saved = int(would_lose * saved_pct)
+                score -= would_lose - saved
+                result_text = f"Спасено {saved} 🍪 ({round(saved_pct * 100)}%)"
+            else:
+                score -= would_lose
+                result_text = f"Рассыпалось -{would_lose} 🍪"
+        else:
+            score -= would_lose
+            result_text = f"-{would_lose} 🍪"
+
+    score = max(0, score)
+    extra = state.get("extra", dict(DEFAULT_EXTRA))
+    await set_user(user_id, state["user_name"], score, state["active_upgrades"],
+                   state["last_attack"], extra=extra)
+
+    return {"ok": True, "score": score, "result_text": result_text}
+
+
 @app.post("/api/star/buy")
 async def handle_star_buy(request: Request):
     user_id = str(request.headers.get("x-telegram-user-id", "guest"))

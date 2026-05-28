@@ -452,6 +452,20 @@
             document.getElementById('event-popup').style.display = 'none';
         }
 
+        async function resolveEvent(eventType, choiceIdx) {
+            const res = await fetch('/api/event/resolve', {
+                method: 'POST', headers: { 'Content-Type': 'application/json', 'x-telegram-user-id': userId },
+                body: JSON.stringify({ event_type: eventType, choice_idx: choiceIdx }),
+            });
+            const d = await res.json();
+            if (d.ok) {
+                score = d.score;
+                const isLoss = d.result_text.includes('-') || d.result_text.includes('Рассыпалось') || d.result_text.includes('не ушёл') || d.result_text.includes('пуста');
+                showFloatingText(innerWidth/2, innerHeight/2 - 40, d.result_text, isLoss ? 'loss' : 'gain');
+                renderUI(); scheduleSave();
+            }
+        }
+
         function triggerRandomEvent() {
             const now = Math.floor(Date.now() / 1000);
             if (shieldUntil > now) {
@@ -461,51 +475,20 @@
             }
             const CHOICE_EVENTS = [
                 { icon: '🦝', text: 'Вор лезет в кладовую!', choices: [
-                    { text: 'Откупиться 50 🍪', fn: () => {
-                        const cost = Math.min(50, score);
-                        score -= cost;
-                        if (Math.random() < 0.5) {
-                            showFloatingText(innerWidth/2, innerHeight/2-40, '-' + cost + ' 🍪 вор ушёл', 'gain');
-                        } else {
-                            const extra = Math.min(30, score);
-                            score -= extra;
-                            showFloatingText(innerWidth/2, innerHeight/2-40, '❌ Вор не ушёл -' + (cost + extra) + ' 🍪', 'loss');
-                        }
-                    } },
-                    { text: 'Рискнуть!', fn: () => { if (Math.random() < 0.5) { showFloatingText(innerWidth/2, innerHeight/2-40, '❌ -100 🍪', 'loss'); score = Math.max(0, score - 100); } else { showFloatingText(innerWidth/2, innerHeight/2-40, '✅ Устоял!', 'gain'); } } },
+                    { text: 'Откупиться 50 🍪' },
+                    { text: 'Рискнуть!' },
                 ]},
                 { icon: '🐭', text: 'Мыши в кладовке!', choices: [
-                    { text: 'Купить ловушку 30 🍪', fn: () => {
-                        const cost = Math.min(30, score);
-                        score -= cost;
-                        if (Math.random() < 0.5) {
-                            showFloatingText(innerWidth/2, innerHeight/2-40, '✅ Ловушка сработала!', 'gain');
-                        } else {
-                            const loss = Math.min(score, Math.floor(score * 0.1) || 5);
-                            score -= loss;
-                            showFloatingText(innerWidth/2, innerHeight/2-40, '❌ Ловушка пуста -' + loss + ' 🍪', 'loss');
-                        }
-                    } },
-                    { text: 'Игнорировать', fn: () => { const loss = Math.min(score, Math.floor(score * 0.1) || 5); score -= loss; showFloatingText(innerWidth/2, innerHeight/2-40, '-' + loss + ' 🍪', 'loss'); } },
+                    { text: 'Купить ловушку 30 🍪' },
+                    { text: 'Игнорировать' },
                 ]},
                 { icon: '💔', text: 'Печенье рассыпалось!', choices: [
-                    { text: 'Попробовать собрать', fn: () => {
-                        if (Math.random() < 0.5) {
-                            const savedPct = 0.1 + Math.random() * 0.6;
-                            const wouldLose = Math.min(score, Math.floor(score * 0.15) || 10);
-                            const saved = Math.floor(wouldLose * savedPct);
-                            score -= wouldLose - saved;
-                            showFloatingText(innerWidth/2, innerHeight/2-40, '✅ Спасено ' + saved + ' 🍪 (' + Math.round(savedPct * 100) + '%)', 'gain');
-                        } else {
-                            const loss = Math.min(score, Math.floor(score * 0.15) || 10);
-                            score -= loss;
-                            showFloatingText(innerWidth/2, innerHeight/2-40, '❌ Рассыпалось -' + loss + ' 🍪', 'loss');
-                        }
-                    } },
-                    { text: 'Выбросить и забыть', fn: () => { const loss = Math.min(score, Math.floor(score * 0.15) || 10); score -= loss; showFloatingText(innerWidth/2, innerHeight/2-40, '-' + loss + ' 🍪', 'loss'); } },
+                    { text: 'Попробовать собрать' },
+                    { text: 'Выбросить и забыть' },
                 ]},
             ];
-            const evt = CHOICE_EVENTS[Math.floor(Math.random() * CHOICE_EVENTS.length)];
+            const evtIdx = Math.floor(Math.random() * CHOICE_EVENTS.length);
+            const evt = CHOICE_EVENTS[evtIdx];
             const popup = document.getElementById('event-popup');
             popup.innerHTML = `
                 <div class="event-popup">
@@ -520,9 +503,8 @@
             Sound.event();
             popup.querySelectorAll('.choice-btn').forEach(btn => {
                 btn.addEventListener('click', () => {
-                    evt.choices[parseInt(btn.dataset.idx)].fn();
                     popup.style.display = 'none';
-                    renderUI(); scheduleSave();
+                    resolveEvent(evtIdx, parseInt(btn.dataset.idx));
                 });
             });
         }
