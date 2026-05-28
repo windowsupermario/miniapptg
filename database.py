@@ -25,6 +25,7 @@ DEFAULT_EXTRA = {
     "legendary_bought": [],
     "referred_by": "",
     "last_golden_time": 0,
+    "pending_event": None,
 }
 
 if DATABASE_URL:

@@ -452,61 +452,49 @@
             document.getElementById('event-popup').style.display = 'none';
         }
 
-        async function resolveEvent(eventType, choiceIdx) {
-            const res = await fetch('/api/event/resolve', {
+        async function startServerEvent() {
+            const res = await fetch('/api/event/start', {
                 method: 'POST', headers: { 'Content-Type': 'application/json', 'x-telegram-user-id': userId },
-                body: JSON.stringify({ event_type: eventType, choice_idx: choiceIdx }),
             });
             const d = await res.json();
-            if (d.ok) {
-                score = d.score;
-                const isLoss = d.result_text.includes('-') || d.result_text.includes('Рассыпалось') || d.result_text.includes('не ушёл') || d.result_text.includes('пуста');
-                showFloatingText(innerWidth/2, innerHeight/2 - 40, d.result_text, isLoss ? 'loss' : 'gain');
-                renderUI(); scheduleSave();
-            }
-        }
-
-        function triggerRandomEvent() {
-            const now = Math.floor(Date.now() / 1000);
-            if (shieldUntil > now) {
+            if (!d.ok) return;
+            if (d.shielded) {
                 showEventPopup('🛡️', 'Щит сработал!', 'Злоумышленник не прошёл');
                 Sound.event();
                 return;
             }
-            const CHOICE_EVENTS = [
-                { icon: '🦝', text: 'Вор лезет в кладовую!', choices: [
-                    { text: 'Откупиться 50 🍪' },
-                    { text: 'Рискнуть!' },
-                ]},
-                { icon: '🐭', text: 'Мыши в кладовке!', choices: [
-                    { text: 'Купить ловушку 30 🍪' },
-                    { text: 'Игнорировать' },
-                ]},
-                { icon: '💔', text: 'Печенье рассыпалось!', choices: [
-                    { text: 'Попробовать собрать' },
-                    { text: 'Выбросить и забыть' },
-                ]},
-            ];
-            const evtIdx = Math.floor(Math.random() * CHOICE_EVENTS.length);
-            const evt = CHOICE_EVENTS[evtIdx];
             const popup = document.getElementById('event-popup');
             popup.innerHTML = `
                 <div class="event-popup">
-                    <div class="icon">${evt.icon}</div>
-                    <div class="text">${evt.text}</div>
+                    <div class="icon">${d.icon}</div>
+                    <div class="text">${d.text}</div>
                     <div style="display:flex;flex-direction:column;gap:8px;margin-top:12px">
-                        ${evt.choices.map((c, i) => `<button class="btn choice-btn" data-idx="${i}">${c.text}</button>`).join('')}
+                        ${d.choices.map((c, i) => `<button class="btn choice-btn" data-idx="${i}">${c}</button>`).join('')}
                     </div>
                 </div>
             `;
             popup.style.display = 'block';
             Sound.event();
             popup.querySelectorAll('.choice-btn').forEach(btn => {
-                btn.addEventListener('click', () => {
+                btn.addEventListener('click', async () => {
                     popup.style.display = 'none';
-                    resolveEvent(evtIdx, parseInt(btn.dataset.idx));
+                    const r = await fetch('/api/event/resolve', {
+                        method: 'POST', headers: { 'Content-Type': 'application/json', 'x-telegram-user-id': userId },
+                        body: JSON.stringify({ choice_idx: parseInt(btn.dataset.idx) }),
+                    });
+                    const rd = await r.json();
+                    if (rd.ok) {
+                        score = rd.score;
+                        const isLoss = rd.result_text.includes('-') || rd.result_text.includes('Рассыпалось') || rd.result_text.includes('не ушёл') || rd.result_text.includes('пуста');
+                        showFloatingText(innerWidth/2, innerHeight/2 - 40, rd.result_text, isLoss ? 'loss' : 'gain');
+                        renderUI(); scheduleSave();
+                    }
                 });
             });
+        }
+
+        function triggerRandomEvent() {
+            startServerEvent();
         }
 
         function scheduleRandomEvent() {
@@ -924,7 +912,7 @@
             let html = '<div style="margin-top:16px;font-weight:700;font-size:14px">⭐ Магазин звёзд (у тебя ' + stars + ' ⭐)</div>';
             items.forEach(item => {
                 const canBuy = stars >= item.cost;
-                html += '<div class="shop-item"><div class="shop-info"><div class="shop-name">' + item.name + '</div><div class="shop-desc">' + item.cost + ' ⭐</div></div><button class="shop-btn" data-star="' + item.id + '" ' + (!canBuy ? 'disabled' : '') + '>Купить</button></div>';
+                html += '<div class="shop-item"><div class="shop-info"><div class="shop-name">' + item.name + '</div></div><button class="shop-btn" data-star="' + item.id + '" ' + (!canBuy ? 'disabled' : '') + '>' + item.cost + ' ⭐</button></div>';
             });
             return html;
         }
@@ -942,9 +930,9 @@
                         <div style="width:28px;height:28px;border-radius:50%;background:${s.gradient};flex-shrink:0"></div>
                         <div class="shop-info">
                             <div class="shop-name">${s.name} ${active ? '✓' : ''}</div>
-                            <div class="shop-desc">${s.cost ? s.cost + ' 🍪' : 'Бесплатно'}${owned ? ' · в коллекции' : ''}</div>
+                            <div class="shop-desc">${owned ? 'в коллекции' : ''}</div>
                         </div>
-                        ${!owned ? `<button class="shop-btn" data-skin="${key}" ${!canBuy ? 'disabled' : ''}>Купить</button>`
+                        ${!owned ? `<button class="shop-btn" data-skin="${key}" ${!canBuy ? 'disabled' : ''}>${s.cost ? s.cost + ' 🍪' : 'Бесплатно'}</button>`
                                  : `<button class="shop-btn bought" data-select="${key}" ${active ? 'disabled' : ''}>Надеть</button>`}
                     </div>
                 `;
@@ -1157,10 +1145,10 @@
 
         function renderFuelBuyHtml() {
             let html = '<div style="margin-top:16px;font-weight:700;font-size:14px">⛽ Топливо</div>';
-            html += '<div class="shop-item"><div class="shop-icon" style="font-size:24px">⛽</div><div class="shop-info"><div class="shop-name">Купить топливо</div><div class="shop-desc">250 🍪 за 1 ⛽ (сейчас ' + fuel + ' ⛽)</div></div>';
+            html += '<div class="shop-item"><div class="shop-icon" style="font-size:24px">⛽</div><div class="shop-info"><div class="shop-name">Купить топливо</div><div class="shop-desc">сейчас ' + fuel + ' ⛽</div></div>';
             [1, 5].forEach(a => {
                 const canBuy = score >= a * 250;
-                html += '<button class="shop-btn" data-fuel-amount="' + a + '" ' + (!canBuy ? 'disabled' : '') + '>' + a + ' ⛽</button>';
+                html += '<button class="shop-btn" data-fuel-amount="' + a + '" ' + (!canBuy ? 'disabled' : '') + '>' + (a * 250) + ' 🍪</button>';
             });
             html += '</div>';
             return html;
@@ -1180,7 +1168,7 @@
                 const expiry = activePlanets[p.key] || 0;
                 const isActive = expiry > now;
                 const canGo = fuel >= p.fuel_cost && !isActive;
-                html += '<div class="shop-item"><div class="shop-icon" style="font-size:24px">🪐</div><div class="shop-info"><div class="shop-name">' + p.name + '</div><div class="shop-desc">' + p.desc + ' · ' + p.fuel_cost + ' ⛽' + (isActive ? ' · ⏱ ' + timeStr(expiry) : '') + '</div></div><button class="shop-btn' + (isActive ? ' bought' : '') + '" data-planet="' + p.key + '" ' + (!canGo ? 'disabled' : '') + '>' + (isActive ? '✓' : 'Лететь') + '</button></div>';
+                html += '<div class="shop-item"><div class="shop-icon" style="font-size:24px">🪐</div><div class="shop-info"><div class="shop-name">' + p.name + '</div><div class="shop-desc">' + p.desc + (isActive ? ' · ⏱ ' + timeStr(expiry) : '') + '</div></div><button class="shop-btn' + (isActive ? ' bought' : '') + '" data-planet="' + p.key + '" ' + (!canGo ? 'disabled' : '') + '>' + (isActive ? '✓' : p.fuel_cost + ' ⛽') + '</button></div>';
             });
             return html;
         }
@@ -1198,7 +1186,7 @@
             items.forEach(item => {
                 const isBought = bought.includes(item.key);
                 const canBuy = score >= item.cost && !isBought;
-                html += '<div class="shop-item"><div class="shop-info"><div class="shop-name">' + item.name + '</div><div class="shop-desc">' + item.cost + ' 🍪</div></div><button class="shop-btn' + (isBought ? ' bought' : '') + '" data-legend="' + item.key + '" ' + (!canBuy ? 'disabled' : '') + '>' + (isBought ? '✓' : 'Купить') + '</button></div>';
+                html += '<div class="shop-item"><div class="shop-info"><div class="shop-name">' + item.name + '</div></div><button class="shop-btn' + (isBought ? ' bought' : '') + '" data-legend="' + item.key + '" ' + (!canBuy ? 'disabled' : '') + '>' + (isBought ? '✓' : item.cost + ' 🍪') + '</button></div>';
             });
             return html;
         }

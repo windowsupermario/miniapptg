@@ -245,6 +245,15 @@ async def handle_get_user(request: Request, ref: str = ""):
         state["score"] += start_bonus
         extra["start_bonus"] = 0
 
+    pending = extra.get("pending_event")
+    if pending and isinstance(pending, dict):
+        elapsed = int(time.time()) - pending.get("time", 0)
+        if elapsed > PENDING_EVENT_TIMEOUT:
+            score_before = state["score"]
+            new_score, _ = apply_event(score_before, pending["type"], random.randint(0, 1))
+            state["score"] = new_score
+            extra["pending_event"] = None
+
     calc_energy(extra)
 
     planets_boost, active_planets = calc_planets_bonus(extra.get("active_planets", {}))
@@ -460,21 +469,21 @@ async def handle_daily(request: Request):
 
 EVENTS = [
     {  # 0: Raccoon
-        "icon": "🦝", "text": "Вор лезет в кладовую!",
+        "name": "Вор", "icon": "🦝", "text": "Вор лезет в кладовую!",
         "choices": [
             {"text": "Откупиться 50 🍪"},
             {"text": "Рискнуть!"},
         ]
     },
     {  # 1: Mice
-        "icon": "🐭", "text": "Мыши в кладовке!",
+        "name": "Мыши", "icon": "🐭", "text": "Мыши в кладовке!",
         "choices": [
             {"text": "Купить ловушку 30 🍪"},
             {"text": "Игнорировать"},
         ]
     },
     {  # 2: Cookie crumble
-        "icon": "💔", "text": "Печенье рассыпалось!",
+        "name": "Крошки", "icon": "💔", "text": "Печенье рассыпалось!",
         "choices": [
             {"text": "Попробовать собрать"},
             {"text": "Выбросить и забыть"},
@@ -482,25 +491,11 @@ EVENTS = [
     },
 ]
 
+PENDING_EVENT_TIMEOUT = 60  # секунд — если событие не разрешили, авто-резолв
 
-@app.post("/api/event/resolve")
-async def handle_event_resolve(request: Request):
-    user_id = str(request.headers.get("x-telegram-user-id", "guest"))
-    body = await request.json()
-    event_type = body.get("event_type", 0)
-    choice_idx = body.get("choice_idx", 0)
 
-    if event_type < 0 or event_type >= len(EVENTS):
-        return {"ok": False, "error": "Неизвестное событие"}
-    if choice_idx < 0 or choice_idx > 1:
-        return {"ok": False, "error": "Неверный выбор"}
-
-    state = await get_user(user_id)
-    score = state["score"]
-    if score <= 50:
-        return {"ok": False, "error": "Слишком мало печенек"}
+def apply_event(score: int, event_type: int, choice_idx: int) -> tuple:
     result_text = ""
-
     if event_type == 0:  # Raccoon
         if choice_idx == 0:
             cost = min(50, score)
@@ -517,7 +512,6 @@ async def handle_event_resolve(request: Request):
                 result_text = "-100 🍪"
             else:
                 result_text = "Устоял! 👍"
-
     elif event_type == 1:  # Mice
         if choice_idx == 0:
             cost = min(30, score)
@@ -532,7 +526,6 @@ async def handle_event_resolve(request: Request):
             loss = min(score, max(1, score // 10))
             score -= loss
             result_text = f"-{loss} 🍪"
-
     else:  # Cookie crumble
         would_lose = max(1, min(score, score * 15 // 100))
         if choice_idx == 0:
@@ -547,9 +540,61 @@ async def handle_event_resolve(request: Request):
         else:
             score -= would_lose
             result_text = f"-{would_lose} 🍪"
+    return max(0, score), result_text
 
-    score = max(0, score)
+
+@app.post("/api/event/start")
+async def handle_event_start(request: Request):
+    user_id = str(request.headers.get("x-telegram-user-id", "guest"))
+    state = await get_user(user_id)
     extra = state.get("extra", dict(DEFAULT_EXTRA))
+    now = int(time.time())
+
+    _, _, shield_until, _ = calc_derived_stats(state["active_upgrades"])
+    if shield_until > now:
+        return {"ok": True, "shielded": True}
+
+    event_type = random.randint(0, len(EVENTS) - 1)
+    extra["pending_event"] = {"type": event_type, "time": now}
+    await set_user(user_id, state["user_name"], state["score"], state["active_upgrades"],
+                   state["last_attack"], extra=extra)
+
+    evt = EVENTS[event_type]
+    return {
+        "ok": True, "shielded": False,
+        "event_type": event_type,
+        "icon": evt["icon"],
+        "text": evt["text"],
+        "choices": [c["text"] for c in evt["choices"]],
+    }
+
+
+@app.post("/api/event/resolve")
+async def handle_event_resolve(request: Request):
+    user_id = str(request.headers.get("x-telegram-user-id", "guest"))
+    body = await request.json()
+    choice_idx = body.get("choice_idx", 0)
+
+    if choice_idx < 0 or choice_idx > 1:
+        return {"ok": False, "error": "Неверный выбор"}
+
+    state = await get_user(user_id)
+    extra = state.get("extra", dict(DEFAULT_EXTRA))
+    pending = extra.get("pending_event")
+    if not pending:
+        return {"ok": False, "error": "Нет активного события"}
+
+    score = state["score"]
+    if score <= 50:
+        extra["pending_event"] = None
+        await set_user(user_id, state["user_name"], score, state["active_upgrades"],
+                       state["last_attack"], extra=extra)
+        return {"ok": False, "error": "Слишком мало печенек"}
+
+    event_type = pending["type"]
+    score, result_text = apply_event(score, event_type, choice_idx)
+
+    extra["pending_event"] = None
     await set_user(user_id, state["user_name"], score, state["active_upgrades"],
                    state["last_attack"], extra=extra)
 
